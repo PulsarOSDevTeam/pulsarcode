@@ -1,0 +1,327 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 PulsarOS Intelligence Inc. / Collapse Technologies Inc.
+#
+# pulsarcode - Team Distribution Edition
+# ======================================
+# Simplified launcher for team distribution.
+# Routes to NVIDIA NIM Kimi K2.6 by default.
+#
+# Usage:
+#   pulsarcode                    # Interactive mode
+#   pulsarcode -p "prompt"        # Single prompt
+#   pulsarcode /api               # API key setup
+#   pulsarcode sonar              # List models
+#   pulsarcode status             # Check status
+#   pulsarcode help               # Show help
+
+set -euo pipefail
+
+# --- Configuration ---
+PULSAR_HOME="${PULSAR_HOME:-$HOME/.pulsarcode}"
+NIM_KEY_FILE="${PULSAR_NIM_KEY_FILE:-$PULSAR_HOME/nim.key}"
+NIM_MODEL_ID="${PULSAR_NIM_MODEL:-moonshotai/kimi-k2.6}"
+NIM_PUBLIC_MODEL="${PULSAR_NIM_PUBLIC_MODEL:-nim-kimi}"
+NIM_API_BASE="${NVIDIA_NIM_API_BASE:-https://integrate.api.nvidia.com/v1}"
+
+# Claude Code binary detection
+find_claude() {
+    local cand=""
+    for cand in "$HOME/.local/bin/claude" "$HOME/.claude/bin/claude" "/usr/local/bin/claude" "/opt/homebrew/bin/claude"; do
+        if [[ -x "$cand" ]]; then
+            echo "$cand"
+            return 0
+        fi
+    done
+    command -v claude 2>/dev/null || true
+}
+
+CLAUDE_BIN="$(find_claude)"
+
+# --- Key Management ---
+load_nim_key() {
+    if [[ -n "${NVIDIA_NIM_API_KEY:-}" ]]; then
+        return 0
+    fi
+    if [[ -n "${NVIDIA_NIM_KEY:-}" ]]; then
+        export NVIDIA_NIM_API_KEY="$NVIDIA_NIM_KEY"
+        return 0
+    fi
+    if [[ -n "${NVIDIA_API_KEY:-}" ]]; then
+        export NVIDIA_NIM_API_KEY="$NVIDIA_API_KEY"
+        return 0
+    fi
+    if [[ -f "$NIM_KEY_FILE" ]]; then
+        local key
+        key="$(tr -d '\r\n' < "$NIM_KEY_FILE")"
+        if [[ -n "$key" ]]; then
+            export NVIDIA_NIM_API_KEY="$key"
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# --- API Setup Panel ---
+print_api_panel() {
+    cat <<'PANEL' >&2
+
++------------------------------------------------------------------------------+
+|  PULSARCODE - NVIDIA NIM API Key Setup                                       |
++------------------------------------------------------------------------------+
+
+  Step 1: Visit https://build.nvidia.com/moonshotai/kimi-k2.6
+  Step 2: Sign in or create a free NVIDIA account
+  Step 3: Click "Get API Key" then "Generate Key"
+  Step 4: Copy the key (starts with "nvapi-")
+  Step 5: Paste it below
+
+  Your key is stored locally in ~/.pulsarcode/nim.key (chmod 600)
+  It is never sent anywhere except to NVIDIA NIM.
+
++------------------------------------------------------------------------------+
+
+PANEL
+}
+
+setup_nim_key_interactive() {
+    print_api_panel
+
+    if [[ ! -t 0 ]]; then
+        echo "pulsarcode: This shell cannot accept input." >&2
+        echo "  Run in a normal terminal: pulsarcode /api" >&2
+        return 2
+    fi
+
+    read -rsp "  Paste NVIDIA NIM API key: " key
+    echo "" >&2
+
+    key="${key//$'\r'/}"
+    key="${key//$'\n'/}"
+
+    if [[ -z "$key" ]]; then
+        echo "pulsarcode: No key entered." >&2
+        return 2
+    fi
+
+    if [[ ! "$key" =~ ^nvapi- ]]; then
+        echo "pulsarcode: Warning - key does not start with 'nvapi-'" >&2
+        read -rp "  Store anyway? [y/N] " confirm
+        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+            return 2
+        fi
+    fi
+
+    mkdir -p "$PULSAR_HOME"
+    chmod 700 "$PULSAR_HOME" 2>/dev/null || true
+    printf '%s\n' "$key" > "$NIM_KEY_FILE"
+    chmod 600 "$NIM_KEY_FILE" 2>/dev/null || true
+    export NVIDIA_NIM_API_KEY="$key"
+
+    echo "" >&2
+    echo "  Key stored. Testing connection..." >&2
+
+    # Quick test
+    if curl -s -o /dev/null -w "%{http_code}" \
+        -H "Authorization: Bearer $key" \
+        -H "Content-Type: application/json" \
+        -d '{"model":"moonshotai/kimi-k2.6","messages":[{"role":"user","content":"hi"}],"max_tokens":1}' \
+        "https://integrate.api.nvidia.com/v1/chat/completions" 2>/dev/null | grep -q '^2'; then
+        echo "  Connection OK! Key is valid." >&2
+    else
+        echo "  Warning: Could not verify key. It may still work." >&2
+    fi
+
+    return 0
+}
+
+# --- Status Check ---
+show_status() {
+    echo "pulsarcode status"
+    echo "================="
+    echo ""
+    echo "Configuration:"
+    echo "  Home directory: $PULSAR_HOME"
+    echo "  Key file:       $NIM_KEY_FILE"
+    echo "  Default model:  $NIM_MODEL_ID"
+    echo "  API base:       $NIM_API_BASE"
+    echo ""
+
+    if load_nim_key; then
+        echo "  NVIDIA NIM key: Present"
+    else
+        echo "  NVIDIA NIM key: NOT FOUND"
+        echo "  Run: pulsarcode /api"
+    fi
+    echo ""
+
+    echo "Claude Code:"
+    if [[ -n "$CLAUDE_BIN" ]]; then
+        echo "  Binary: $CLAUDE_BIN"
+    else
+        echo "  Binary: NOT FOUND"
+        echo "  Install from: https://claude.com/claude-code"
+    fi
+    echo ""
+
+    echo "Quick commands:"
+    echo "  pulsarcode        - Launch interactive mode"
+    echo "  pulsarcode /api   - Configure API key"
+    echo "  pulsarcode sonar  - List available models"
+    echo "  pulsarcode help   - Show full help"
+}
+
+# --- Sonar (Model List) ---
+show_sonar() {
+    if ! load_nim_key; then
+        echo "pulsarcode: No NVIDIA NIM key found." >&2
+        echo "  Run: pulsarcode /api" >&2
+        return 1
+    fi
+
+    echo "Available NVIDIA NIM Models (via API Sonar):"
+    echo ""
+
+    # Static list for team distribution (avoids API call)
+    cat <<'MODELS'
+  nim-kimi                          Kimi K2.6 (default, 256K context)
+  nim-kimi-k2-thinking              Kimi K2 Thinking
+  nim-kimi-k2-instruct              Kimi K2 Instruct
+  nim-qwen-qwen3-coder-480b       Qwen 3 Coder 480B
+  nim-qwen-qwq-32b                QwQ 32B
+  nim-meta-llama-3-1-70b          Llama 3.1 70B
+  nim-deepseek-deepseek-v4-flash  DeepSeek V4 Flash
+  nim-mistral-magistral-small     Mistral Magistral Small
+
+  Use with: pulsarcode --model <alias>
+MODELS
+}
+
+# --- Help ---
+show_help() {
+    cat <<'HELP'
+pulsarcode - Sovereign Claude Code for Teams
+
+USAGE:
+  pulsarcode [OPTIONS] [PROMPT]
+
+OPTIONS:
+  -p, --print "prompt"    Single prompt mode
+  --model <alias>         Use specific model (see 'pulsarcode sonar')
+  /api                    Configure NVIDIA NIM API key
+  sonar                   List available models
+  status                  Show configuration status
+  help                    Show this help
+
+ENVIRONMENT:
+  NVIDIA_NIM_API_KEY      Your NVIDIA NIM API key
+  PULSAR_HOME             Config directory (default: ~/.pulsarcode)
+  PULSAR_NIM_MODEL        Default model (default: moonshotai/kimi-k2.6)
+
+EXAMPLES:
+  pulsarcode                    # Interactive mode
+  pulsarcode -p "review code"   # Single prompt
+  pulsarcode --model nim-qwen-qwen3-coder-480b  # Use specific model
+
+SETUP:
+  1. Install Claude Code: https://claude.com/claude-code
+  2. Run: pulsarcode /api
+  3. Follow the NVIDIA NIM setup wizard
+  4. Start coding: pulsarcode
+
+SUPPORT:
+  Email: yassine@pulsaros.ca
+  Docs:  See README.md in this distribution
+
+Copyright (C) 2026 PulsarOS Intelligence Inc. / Collapse Technologies Inc.
+AGPL-3.0-or-later
+HELP
+}
+
+# --- Main ---
+main() {
+    # Handle subcommands
+    case "${1:-}" in
+        /api|--api|api)
+            setup_nim_key_interactive
+            exit $?
+            ;;
+        status)
+            show_status
+            exit 0
+            ;;
+        sonar)
+            show_sonar
+            exit 0
+            ;;
+        help|-h|--help)
+            show_help
+            exit 0
+            ;;
+    esac
+
+    # Check for Claude Code
+    if [[ -z "$CLAUDE_BIN" ]]; then
+        echo "pulsarcode: Claude Code not found." >&2
+        echo "  Install from: https://claude.com/claude-code" >&2
+        exit 127
+    fi
+
+    # Load or prompt for NIM key
+    if ! load_nim_key; then
+        echo "pulsarcode: NVIDIA NIM API key not found." >&2
+        echo "" >&2
+        setup_nim_key_interactive || {
+            echo "pulsarcode: Setup incomplete. Run 'pulsarcode /api' when ready." >&2
+            exit 1
+        }
+    fi
+
+    # Start the local adapter
+    ADAPTER_PORT="${PULSAR_NIM_ADAPTER_PORT:-4000}"
+    ADAPTER_HOST="${PULSAR_NIM_ADAPTER_HOST:-127.0.0.1}"
+
+    # Check if adapter is already running
+    if ! curl -s -o /dev/null -m 2 "http://${ADAPTER_HOST}:${ADAPTER_PORT}/healthz" 2>/dev/null; then
+        echo "pulsarcode: Starting local NVIDIA NIM adapter..." >&2
+
+        # Find the adapter script
+        ADAPTER_SCRIPT=""
+        for path in "$PULSAR_HOME/adapter/nim_anthropic_proxy.py" "./proxy/nim_anthropic_proxy.py"; do
+            if [[ -f "$path" ]]; then
+                ADAPTER_SCRIPT="$path"
+                break
+            fi
+        done
+
+        if [[ -z "$ADAPTER_SCRIPT" ]]; then
+            echo "pulsarcode: Warning - adapter script not found. Trying direct connection." >&2
+            export ANTHROPIC_BASE_URL="https://integrate.api.nvidia.com/v1"
+        else
+            # Start adapter in background
+            nohup python3 "$ADAPTER_SCRIPT" \
+                --host "$ADAPTER_HOST" \
+                --port "$ADAPTER_PORT" \
+                >/dev/null 2>&1 &
+
+            # Wait for it to come up
+            for i in {1..30}; do
+                if curl -s -o /dev/null -m 1 "http://${ADAPTER_HOST}:${ADAPTER_PORT}/healthz" 2>/dev/null; then
+                    break
+                fi
+                sleep 0.5
+            done
+        fi
+    fi
+
+    # Set up Claude Code environment
+    export ANTHROPIC_BASE_URL="http://${ADAPTER_HOST}:${ADAPTER_PORT}"
+    export ANTHROPIC_AUTH_TOKEN="local-pulsar-dev"
+    export ANTHROPIC_MODEL="${PULSAR_NIM_PUBLIC_MODEL:-nim-kimi}"
+    unset ANTHROPIC_API_KEY
+
+    # Launch Claude Code
+    exec "$CLAUDE_BIN" "$@"
+}
+
+main "$@"
