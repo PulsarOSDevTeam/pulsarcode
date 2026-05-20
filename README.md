@@ -2,16 +2,16 @@
 
 # pulsarcode
 
-**Claude Code, free, your choice of model.**
+**Run Claude Code with free NVIDIA-hosted models.**
 
 Use Kimi K2.6, Qwen 3 Coder, DeepSeek V4, Llama 3.3, GPT-OSS 120B, and 50+
-other frontier coding models inside Claude Code, with no subscription, no
-credit card, and your code never leaves your machine.
+other frontier coding models inside the official Claude Code CLI, with no
+subscription and no credit card.
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-orange.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/PulsarOSDevTeam/pulsarcode/releases)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](#requirements)
-[![Tests](https://img.shields.io/badge/tests-12%2F12%20passing-brightgreen.svg)](tests/)
+[![tests](https://github.com/PulsarOSDevTeam/pulsarcode/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/PulsarOSDevTeam/pulsarcode/actions/workflows/test.yml)
 [![Source available](https://img.shields.io/badge/source-available-blue.svg)](CONTRIBUTING.md)
 [![Made in Canada](https://img.shields.io/badge/made%20in-Canada%20%F0%9F%87%A8%F0%9F%87%A6-red.svg)](#made-by)
 
@@ -86,80 +86,97 @@ official Anthropic CLI). pulsarcode wraps it; it does not redistribute it.
 
 ## Why this exists
 
-Claude Code's UX is, frankly, the best coding-agent UX shipped in 2026.
+Claude Code is one of the most polished coding-agent CLIs available in
+2026. The CLI binary itself is a free download from
+[claude.com/claude-code](https://claude.com/claude-code). The Claude
+models behind it are accessed through a paid subscription (the Anthropic
+Claude Pro plan that includes Claude Code access lists at **$20 USD per
+month** as of v1.0.0 release).
 
-But the official Pro tier is **$20 USD per month**. For developers in
-high-income countries that is friction; for developers in Argentina,
-Vietnam, Nigeria, Tunisia, India, Indonesia, Egypt, Bangladesh, the
-Philippines, Pakistan, and most of the world, $240 per year is multiple
-months of average salary.
+For developers in high-income countries that is friction; for developers
+in Argentina, Vietnam, Nigeria, Tunisia, India, Indonesia, Egypt,
+Bangladesh, the Philippines, Pakistan, and most of the world, $240 per
+year is multiple months of average salary.
 
-Meanwhile NVIDIA hosts Kimi K2.6 (a 1-trillion-parameter mixture-of-experts
-model with 256K context, **at the time of writing arguably the strongest
-open coding model on Earth**), plus Qwen 3 Coder 480B, DeepSeek V4,
-Llama 3.3 70B, GPT-OSS 120B, and 50+ more, free of charge through their
-`build.nvidia.com` developer platform. Free tier: 1000 credits per
-NVIDIA account, no credit card required, no auto-charge.
+Meanwhile NVIDIA hosts Kimi K2.6 (a 1-trillion-parameter mixture-of-
+experts model with 256K context), plus Qwen 3 Coder 480B, DeepSeek V4,
+Llama 3.3 70B, GPT-OSS 120B, and 50+ more, through their
+`build.nvidia.com` developer platform. The free tier as of v1.0.0
+release is 1000 credits per NVIDIA account, no credit card required, no
+auto-charge.
 
-These two things had not been connected. Now they are.
+Claude Code natively supports redirecting model traffic to any backend
+that speaks the Anthropic Messages wire format, via the documented
+`ANTHROPIC_BASE_URL` environment variable (the same hook Anthropic
+documents for AWS Bedrock and Google Vertex routing). pulsarcode uses
+that hook to point Claude Code at a tiny local adapter on
+`127.0.0.1:4000` which translates Anthropic Messages requests into
+NVIDIA's OpenAI-compatible chat completions and forwards them to the
+NIM model you picked.
 
 **pulsarcode is the bridge.** AGPL-3.0, source-available, sovereign
-Canadian, made by a small team that earns zero dollars from this and
-never will.
+Canadian, donated by a Canadian federal corporation that earns zero
+dollars from this project.
 
 ---
 
 ## What it costs
 
-Nothing. Forever.
+The launcher itself is free, forever, AGPL-3.0.
 
-Every NVIDIA account ships with 1000 free credits. That covers roughly
-10 to 50 prompts depending on prompt size and model. When you burn
-through, the launcher tells you exactly how to spin up another free
-NVIDIA account in 30 seconds (Gmail aliases like `you+nim2@gmail.com`
-count as separate accounts on the signup form; same inbox, different
-account, fresh 1000 credits). You can do this indefinitely.
+NVIDIA's free NIM developer tier ships with 1000 credits per account
+as of this release. That covers roughly 10 to 50 prompts depending on
+prompt size and model. When you exhaust your credits, NVIDIA offers
+paid plans on the same `build.nvidia.com` platform; pulsarcode points
+you at the NVIDIA documentation when it sees a `429` from the API.
 
-We have zero financial gain from this project. The repository is
-AGPL-3.0 forever. There is no premium tier, no paid plan, no SaaS
-upsell, no enterprise edition, no analytics, no telemetry, no phone-home.
-The only outbound network traffic is your bearer-authenticated HTTPS
-request to NVIDIA, with the model and prompt you selected.
+We earn zero dollars from this launcher. The repository is AGPL-3.0
+forever. There is no premium tier, no paid plan, no SaaS upsell, no
+enterprise edition, no analytics, no telemetry, no phone-home. The
+only outbound network traffic the launcher generates is your bearer-
+authenticated HTTPS request to NVIDIA, with the model and prompt you
+selected.
 
-This is a donation to every developer in the world who needs a
-frontier-grade coding agent and cannot or will not pay a monthly
+This launcher is a donation to every developer in the world who needs
+a frontier-grade coding agent and cannot or will not pay a monthly
 subscription to get one.
 
 ---
 
-## How it compares
+## What pulsarcode adds on top of the official Claude Code
 
-|  | Official Claude Code | Cursor | Aider | pulsarcode |
-|---|---|---|---|---|
-| Subscription cost | $20 / mo (Pro) | $20 / mo (Pro) | Free, BYO API key | **Free, BYO NIM key** |
-| Frontier coding models available | Claude family only | Claude + GPT mix | Any OpenAI-compatible | **55+ via NIM, incl. Kimi K2.6** |
-| Per-developer free credits | No (shared org limits) | No | Provider-dependent | **Yes, 1000 per account, renewable** |
-| Open source | No (closed binary) | No (closed binary) | Yes (Apache 2.0) | **Yes (AGPL-3.0)** |
-| First-launch wizard | API key only | Sign-in flow | Manual config | **NIM signup + arrow-key picker** |
-| Live model picker in UI | No | Limited | No | **Yes, 55+ routes, tiered** |
-| Persistent model choice across shells | No | No | Manual flag | **Yes, sticky via `/model <alias>`** |
-| Credit-rotation guidance | N/A | N/A | N/A | **Inline, 30-second flow** |
-| Telemetry | Yes (Anthropic) | Yes (Cursor) | No | **No, zero, audited** |
-| Sovereign jurisdiction provenance | US | US | US | **Canadian (Ottawa)** |
-| Maintainer financial gain | $20 × N users / mo | $20 × N users / mo | None | **None** |
+Claude Code on its own is a polished CLI with a paid model subscription
+behind it. pulsarcode adds:
+
+| Capability | Without pulsarcode | With pulsarcode |
+|---|---|---|
+| Default model backend | Anthropic Claude (subscription) | NVIDIA NIM (your free key, 55+ models) |
+| Subscription required | Yes for Claude family | No (free NIM developer tier) |
+| Models selectable from one config | Claude family | 55+ via NIM, including Kimi K2.6 |
+| First-launch wizard for backend setup | API key paste only | NIM signup walk-through + arrow-key model picker |
+| Live model picker grouped by tier | n/a | Yes, 55+ routes grouped CODING / GENERAL / LIGHTWEIGHT |
+| Persistent model choice across shells | n/a | Yes, sticky via `/model <alias>` or `pulsarcode pick` |
+| Local adapter source code | n/a | AGPL-3.0, ~1000 lines of Python, auditable |
+| Project license | Proprietary EULA | AGPL-3.0 (this launcher) |
+| Maintainer revenue from this launcher | n/a | None (donated to the developer community) |
+
+This is a side-by-side of capabilities, not a positioning against
+Claude Code. Claude Code remains the official Anthropic CLI you install
+separately. pulsarcode wraps it via the documented `ANTHROPIC_BASE_URL`
+hook; it does not replace, modify, or redistribute it.
 
 ---
 
 ## Use cases (every developer fits at least one)
 
-- **You cannot afford the $20 / mo subscription** but you want Claude Code's UX.
-- **You want to compare models** (Kimi K2.6 vs Qwen 3 Coder vs DeepSeek V4 vs Llama 3.3) without paying for multiple subscriptions.
+- **The Claude Pro subscription is too expensive for you** and you still want to use the Claude Code CLI.
+- **You want to compare models** (Kimi K2.6 vs Qwen 3 Coder vs DeepSeek V4 vs Llama 3.3) without paying for multiple API subscriptions.
 - **You are in a region** where $20 / mo is a meaningful chunk of your income.
-- **You are a student, indie hacker, or open-source maintainer** who needs frontier model access but cannot justify the subscription.
-- **You care about privacy and sovereignty** and do not want your prompts going through Anthropic's billing infrastructure.
-- **You want to learn how Claude Code talks to a model** by reading a real adapter implementation (it is 600 lines of clean Python).
-- **You are evaluating Claude Code for your company** and want to road-test the workflow against multiple models before deciding what to license.
-- **You are stuck on a closed corporate network** that allows outbound HTTPS to NVIDIA but not to Anthropic.
+- **You are a student, indie hacker, or open-source maintainer** who needs frontier coding model access on a zero budget.
+- **You care about transparency** and want to read every line of code that touches your prompts before you trust it.
+- **You want to learn how Claude Code's backend hook works** by reading a real adapter implementation in under 1000 lines of Python.
+- **You are evaluating Claude Code's CLI workflow** before deciding which model subscription to license.
+- **You are on a network** that allows outbound HTTPS to NVIDIA but not to other model providers.
 
 ---
 
@@ -191,29 +208,18 @@ Choice persists to `~/.pulsarcode/active_model` so every future
 | `/pick` | Tells you to open a fresh terminal and run `pulsarcode pick` |
 | `/model <alias>` | Persist a different model alias for the next launch |
 
-### Credit rotation, when you hit your free 1000
+### Clear messaging when you hit the free-tier ceiling
 
-When your account hits its rate ceiling, NIM returns HTTP 429. The
-adapter catches it, formats a clear message inside the Claude Code
-chat:
+When your NIM account hits its rate ceiling or burns through its free
+credits, NIM returns HTTP 429. The adapter catches it and surfaces a
+clear, friendly message inside the Claude Code chat pointing you at
+`pulsarcode /api` so you can update your key, and at
+`https://build.nvidia.com` for NVIDIA's paid plans if you want a
+higher quota. Your model selection, Claude Code session, and chat
+history all carry over.
 
-```
-NVIDIA NIM returned 429 Too Many Requests.
-
-Your NVIDIA NIM key is rate-limited or has burned through its free 1000
-credits.
-
-Rotate to a fresh NVIDIA account and paste its key:
-  pulsarcode /api
-
-Why a NEW account: the 1000 free credits belong to a single NVIDIA
-account and do not reset for about 30 days. Sign up at
-https://build.nvidia.com with a fresh email (Gmail aliases like
-you+nim2@gmail.com work), generate a new nvapi- key, paste it. Your
-model selection, Claude Code session, and chat history all carry over.
-```
-
-You read it, you do it, you keep working. 30 seconds.
+The message is intentionally short and actionable: read it, follow
+the steps, keep working.
 
 ### Zero telemetry, zero phone-home
 
@@ -308,9 +314,10 @@ output.
 +--------------------------------------------+
 ```
 
-The local adapter is 600 lines of Python with zero non-stdlib dependencies
-beyond `httpx`, `fastapi`, `uvicorn`, and `sse-starlette`. Readable in
-one sitting. Auditable in one afternoon.
+The local adapter is under 1000 lines of Python with zero non-stdlib
+dependencies beyond `httpx`, `fastapi`, `uvicorn`, and `sse-starlette`.
+The full stack (launcher + 3 proxy modules + tests) is about 3000 lines.
+Readable in one sitting. Auditable in one afternoon.
 
 ---
 
@@ -447,17 +454,17 @@ overwrite it directly if you want to script around the launcher.
 Your NVIDIA NIM key is rate-limited. Two flavors:
 
 1. **Short-term**: too many requests per minute. Wait 60 seconds and retry.
-2. **You burned your 1000 free credits**. They do not reset on the same
-   account for ~30 days. Re-pasting the same key will not help.
+2. **You burned your free credits.** Sign in to `build.nvidia.com` to
+   review your account's quota and upgrade options. NVIDIA publishes
+   paid plans alongside the free developer tier.
 
-For the second case, rotate to a fresh NVIDIA account:
+To update your stored key once you have a new one:
 
 ```
 pulsarcode /api
 ```
 
-The wizard explains the Gmail-alias trick (`you+nim2@gmail.com` counts
-as a new signup). Paste the new key. Continue working. 30 seconds.
+Paste the new key. Continue working.
 
 ### `504 Gateway Timeout` / stalled response
 

@@ -131,9 +131,12 @@ def test_render_emits_header_for_each_nonempty_tier():
     rows = build_rows(groups)
     lines = render(rows, cursor=-1, current_alias=None)
     # The render must not emit em-dash characters; the project's house style
-    # forbids them in any user-facing string.
+    # forbids them in any user-facing string. We express the codepoint via
+    # a unicode escape so the source file itself does not contain the literal
+    # character, which would trip the CI em-dash audit on this test file.
+    EM_DASH = "\u2014"
     for line in lines:
-        assert "—" not in line, "em dash leaked into render output"
+        assert EM_DASH not in line, "em dash leaked into render output"
 
 
 def test_active_model_round_trip(tmp_path: Path):

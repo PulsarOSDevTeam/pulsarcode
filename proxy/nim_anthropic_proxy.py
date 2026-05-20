@@ -324,16 +324,16 @@ def nim_issue_notice_text(settings: NIMSettings, status_code: int, detail: str =
     if status_code == 429:
         headline = "NVIDIA NIM returned 429 Too Many Requests."
         meaning = (
-            "Your NVIDIA NIM key is rate-limited or has burned through its free 1000 credits. "
-            "The local pulsarcode adapter is healthy; this is a per-account ceiling, not a local issue."
+            "Your NVIDIA NIM key is rate-limited or has reached its current quota. "
+            "The local pulsarcode adapter is healthy; this is a quota condition on the upstream account."
         )
         action = (
-            "Rotate to a fresh NVIDIA account and paste its key:\n"
-            "  pulsarcode /api\n\n"
-            "Why a NEW account: the 1000 free credits belong to a single NVIDIA account and\n"
-            "do not reset for about 30 days. Sign up at https://build.nvidia.com with a fresh\n"
-            "email (Gmail aliases like you+nim2@gmail.com work), generate a new nvapi- key,\n"
-            "paste it. Your model selection, Claude Code session, and chat history all carry over."
+            "Two paths forward:\n"
+            "  1. Wait briefly for the per-minute rate window to clear, then retry your prompt.\n"
+            "  2. Sign in to https://build.nvidia.com to review your account quota and the\n"
+            "     paid plans NVIDIA offers alongside the free developer tier.\n\n"
+            "To update the stored key once you have a new one:\n"
+            "  pulsarcode /api"
         )
     elif status_code in {401, 403}:
         headline = f"NVIDIA NIM returned HTTP {status_code} authentication failure."

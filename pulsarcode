@@ -186,11 +186,10 @@ store_nim_key_interactive() {
     existing="$(current_nim_key 2>/dev/null || true)"
     if [[ -n "$existing" ]]; then
         cat <<'ROTATE_HINT' >&2
-  Tip: if you hit the 1000-credit limit, you need a NEW NVIDIA account.
-       Free credits do not reset on the same account for ~30 days. Sign up
-       with a fresh email at https://build.nvidia.com and paste that
-       account's key here. Gmail aliases like you+nim2@gmail.com count as
-       separate accounts on most signup forms.
+  Tip: if your key is rate-limited or out of credits, sign in to
+       https://build.nvidia.com to review your account quota and the
+       paid plans NVIDIA offers alongside the free developer tier.
+       Once you have a new key, paste it below.
 
 ROTATE_HINT
         printf '%s' "Replace stored key now? [y/N] " >&2
