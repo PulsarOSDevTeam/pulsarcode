@@ -303,7 +303,38 @@ def _ascii_top() -> str:
     return "+" + "-" * 76 + "+"
 
 
-def render(rows: Sequence[Row], cursor: int, current_alias: Optional[str]) -> List[str]:
+# Default viewport size for the windowed picker. Overridable via the
+# PULSAR_PICKER_VIEWPORT env var. Smaller terminals can set it to 5; larger
+# screens can set it to 15. The number includes both header rows and model
+# rows in the visible slice.
+DEFAULT_VIEWPORT = int(os.environ.get("PULSAR_PICKER_VIEWPORT", "10"))
+
+
+def _render_row(row: Row, is_cursor: bool, is_current: bool) -> str:
+    if row.kind == "header":
+        return "  " + _paint(row.label, _BOLD)
+    marker_cursor = ">" if is_cursor else " "
+    marker_state = "[x]" if is_current else "[ ]"
+    alias_text = row.label
+    upstream = row.record.upstream_id if row.record else ""
+    meta = _describe(row.record) if row.record else ""
+    line = f"  {marker_cursor} {marker_state}  {alias_text:36}  {upstream:50}  {meta}"
+    if is_cursor:
+        return _paint(line, _EMBER)
+    if is_current:
+        return _paint(line, _GREEN)
+    return line
+
+
+def render(
+    rows: Sequence[Row],
+    cursor: int,
+    current_alias: Optional[str],
+    window_top: Optional[int] = None,
+    viewport: Optional[int] = None,
+) -> List[str]:
+    """Render the picker. If window_top + viewport are given, render only the
+    visible slice; otherwise render the whole list (used by non-TTY fallback)."""
     lines: List[str] = []
     lines.append("")
     lines.append(_paint(_ascii_top(), _EMBER))
@@ -315,27 +346,24 @@ def render(rows: Sequence[Row], cursor: int, current_alias: Optional[str]) -> Li
     lines.append(_paint("  arrows up / down to move,  enter to select,  esc to keep current", _DIM))
     lines.append("")
 
-    for index, row in enumerate(rows):
-        if row.kind == "header":
-            lines.append("")
-            lines.append("  " + _paint(row.label, _BOLD))
-            lines.append("  " + _paint("-" * min(len(row.label), 70), _DIM))
-            continue
+    if window_top is None or viewport is None:
+        # Render every row (legacy / non-TTY mode).
+        start, end = 0, len(rows)
+    else:
+        start = max(0, min(window_top, len(rows)))
+        end = min(start + viewport, len(rows))
 
+    if start > 0:
+        lines.append("  " + _paint(f"({start} more above)", _DIM))
+
+    for index in range(start, end):
+        row = rows[index]
         is_cursor = index == cursor
-        is_current = row.record is not None and row.record.alias == current_alias
-        marker_cursor = ">" if is_cursor else " "
-        marker_state = "[x]" if is_current else "[ ]"
-        alias_text = row.label
-        upstream = row.record.upstream_id if row.record else ""
-        meta = _describe(row.record) if row.record else ""
+        is_current = row.kind == "model" and row.record is not None and row.record.alias == current_alias
+        lines.append(_render_row(row, is_cursor, is_current))
 
-        line = f"  {marker_cursor} {marker_state}  {alias_text:36}  {upstream:50}  {meta}"
-        if is_cursor:
-            line = _paint(line, _EMBER)
-        elif is_current:
-            line = _paint(line, _GREEN)
-        lines.append(line)
+    if end < len(rows):
+        lines.append("  " + _paint(f"({len(rows) - end} more below)", _DIM))
 
     lines.append("")
     lines.append(_paint(_ascii_top(), _EMBER))
@@ -383,16 +411,31 @@ class _RawTTY:
 
 
 def _read_key() -> str:
-    """Return a token like 'UP', 'DOWN', 'ENTER', 'ESC', 'q', 'CTRL-C'."""
+    """Return a token like 'UP', 'DOWN', 'ENTER', 'ESC', 'q', 'CTRL-C'.
+
+    Notes on the escape-sequence handling: terminals deliver arrow keys as a
+    three-byte CSI sequence (ESC '[' direction). On the FIRST keypress after
+    entering cbreak mode, the bytes can arrive in two chunks several tens of
+    milliseconds apart on some terminals (slow TTY paths, focus-change
+    delivery, GPU-accelerated terminals on macOS). A short inter-byte timeout
+    caused the bug where a first arrow press was treated as plain ESC and
+    cancelled the picker. We wait up to 200ms between bytes, which is
+    imperceptible to a human pressing ESC but plenty of time for any CSI
+    sequence to fully arrive.
+    """
     ch = sys.stdin.read(1)
     if ch == "\x1b":
-        # Escape OR start of CSI sequence. Peek with a tiny non-blocking read.
         import select
-        ready, _, _ = select.select([sys.stdin], [], [], 0.02)
+        # Wait up to 200ms for the next byte of a possible CSI sequence.
+        ready, _, _ = select.select([sys.stdin], [], [], 0.20)
         if not ready:
             return "ESC"
         ch2 = sys.stdin.read(1)
         if ch2 != "[":
+            return "ESC"
+        # And up to 200ms for the third byte.
+        ready, _, _ = select.select([sys.stdin], [], [], 0.20)
+        if not ready:
             return "ESC"
         ch3 = sys.stdin.read(1)
         if ch3 == "A":
@@ -403,6 +446,18 @@ def _read_key() -> str:
             return "RIGHT"
         if ch3 == "D":
             return "LEFT"
+        # Some terminals send numeric CSI sequences (e.g., for Page Up / Down,
+        # Home, End). Drain trailing bytes up to the terminator '~' so the
+        # next read does not see garbage.
+        if ch3.isdigit():
+            for _ in range(8):
+                ready, _, _ = select.select([sys.stdin], [], [], 0.05)
+                if not ready:
+                    break
+                terminator = sys.stdin.read(1)
+                if terminator == "~":
+                    break
+            return "ESC"
         return "ESC"
     if ch in ("\r", "\n"):
         return "ENTER"
@@ -526,6 +581,15 @@ def pick_model(
     if cursor is None:
         cursor = first_selectable(rows)
 
+    viewport = max(3, int(os.environ.get("PULSAR_PICKER_VIEWPORT", str(DEFAULT_VIEWPORT))))
+    # Start the window so the cursor is visible. If cursor sits near the top
+    # of the list, anchor the window at zero; otherwise center the cursor in
+    # the window for first paint.
+    if cursor < viewport:
+        window_top = 0
+    else:
+        window_top = max(0, cursor - viewport // 2)
+
     last_paint_lines = 0
 
     def _move(delta: int) -> int:
@@ -537,6 +601,16 @@ def pick_model(
         if new < bound_low or new > bound_high:
             return cursor
         return new
+
+    def _adjust_window(c: int, top: int) -> int:
+        # Keep the cursor inside the visible window. Scroll one step at a
+        # time so the user sees an incremental scroll behavior (one row
+        # appears at the bottom, one disappears at the top).
+        if c < top:
+            return c
+        if c >= top + viewport:
+            return c - viewport + 1
+        return top
 
     if _ansi_enabled():
         out.write(_HIDE_CURSOR)
@@ -550,7 +624,7 @@ def pick_model(
                     out.write(f"\x1b[{last_paint_lines}F")
                     out.write("\x1b[J")
 
-                lines = render(rows, cursor, current_alias)
+                lines = render(rows, cursor, current_alias, window_top=window_top, viewport=viewport)
                 for line in lines:
                     out.write(line + "\n")
                 out.flush()
@@ -560,9 +634,11 @@ def pick_model(
 
                 if key == "UP":
                     cursor = _move(-1)
+                    window_top = _adjust_window(cursor, window_top)
                     continue
                 if key == "DOWN":
                     cursor = _move(+1)
+                    window_top = _adjust_window(cursor, window_top)
                     continue
                 if key == "ENTER":
                     record = rows[cursor].record
