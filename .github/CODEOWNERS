@@ -1,0 +1,6 @@
+# Every file in this repository is owned by PulsarOSDevTeam.
+# Any pull request against any path requires review by an
+# org maintainer before it can be merged. External contributions
+# are not accepted per CONTRIBUTING.md; this file is a structural
+# defense-in-depth against accidental merges.
+* @PulsarOSDevTeam
