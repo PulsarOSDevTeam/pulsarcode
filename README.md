@@ -211,5 +211,4 @@ Copyright (C) 2026 PulsarOS Intelligence Inc. / Collapse Technologies Inc.
 ## Support
 
 - Direct: `yassine@pulsaros.ca`.
-- Internal Gitea: `http://10.100.0.1:3000/commander/pulsarcode-team` (sovereign
-  Canadian, WireGuard only).
+- Issues: open a ticket on this repo.
