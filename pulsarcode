@@ -471,6 +471,15 @@ NO_TTY
     fi
     existing="$(current_nim_key 2>/dev/null || true)"
     if [[ -n "$existing" ]]; then
+        # FIXED BY Claude 2026-05-20 (Rung 1B+): credit-rotation hint.
+        cat <<'ROTATE_HINT' >&2
+  Tip: if you hit your 1000-credit limit, you need a NEW NVIDIA account.
+       Free credits do not reset on the same account for ~30 days. Sign up
+       with a fresh email at https://build.nvidia.com and paste that account's
+       key here. Gmail aliases like you+nim2@gmail.com count as separate
+       accounts on most signup forms.
+
+ROTATE_HINT
         printf '%s' "Replace stored key now? [y/N] " >&2
         read -r confirm
         case "$confirm" in

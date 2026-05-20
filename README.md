@@ -135,13 +135,39 @@ pulsarcode help             # full help
 ### `429 Too Many Requests`
 
 Your NVIDIA NIM key bucket is throttled. Free tier limits are per-key,
-per-developer, not shared across the team. Wait for the rate-limit window to
-roll over (usually one minute) and retry. If you hit 429 repeatedly, you have
-likely exhausted your 1000-credit allotment for the month; rotate your key by
-generating a new one at `https://build.nvidia.com` and running `pulsarcode /api`.
+per-developer, not shared across the team.
 
-This is a per-developer ceiling. Other teammates on the same project keep
-working on their own keys at their own pace.
+Two flavors:
+
+1. **Short-term rate limit (a few requests per minute)**. Wait 60 seconds and
+   retry.
+
+2. **You burned your 1000-credit free allotment**. This is the harder one. The
+   1000 credits belong to a single NVIDIA account and do NOT reset for about
+   30 days. Re-pasting the same exhausted key will not help. You need a fresh
+   NVIDIA account.
+
+Rotation flow (30 seconds, no Claude Code restart needed):
+
+```
+pulsarcode /api
+```
+
+The wizard tells you everything. The fast path:
+
+1. Open `https://build.nvidia.com` in a private / incognito window.
+2. Sign up with a fresh email. Gmail aliases like `you+nim2@gmail.com`,
+   `you+nim3@gmail.com` count as separate accounts on the NVIDIA signup
+   form. Same inbox, different account, fresh 1000 credits.
+3. Click "Get API Key" on any model card, then "Generate Key".
+4. Copy the new `nvapi-` value.
+5. Paste it into the `pulsarcode /api` prompt when it asks. Confirm yes when
+   it asks "Replace stored key now?".
+6. Go back to Claude Code and continue. Your model selection, chat history,
+   and project context all carry over. Only the NIM key changed underneath.
+
+You can repeat this every time you exhaust a 1000-credit bucket. Each fresh
+NVIDIA account is independent.
 
 ### `504 Gateway Timeout` or stalled response
 

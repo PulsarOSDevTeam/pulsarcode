@@ -324,8 +324,16 @@ def nim_issue_notice_text(settings: NIMSettings, status_code: int, detail: str =
     if status_code == 429:
         headline = "NVIDIA NIM returned 429 Too Many Requests."
         meaning = (
-            "The local pulsarcode adapter is healthy and responding immediately; "
-            "the stored NVIDIA key is currently rate-limited."
+            "Your NVIDIA NIM key is rate-limited or has burned through its free 1000 credits. "
+            "The local pulsarcode adapter is healthy; this is a per-account ceiling, not a local issue."
+        )
+        action = (
+            "Rotate to a fresh NVIDIA account and paste its key:\n"
+            "  pulsarcode /api\n\n"
+            "Why a NEW account: the 1000 free credits belong to a single NVIDIA account and\n"
+            "do not reset for about 30 days. Sign up at https://build.nvidia.com with a fresh\n"
+            "email (Gmail aliases like you+nim2@gmail.com work), generate a new nvapi- key,\n"
+            "paste it. Your model selection, Claude Code session, and chat history all carry over."
         )
     elif status_code in {401, 403}:
         headline = f"NVIDIA NIM returned HTTP {status_code} authentication failure."
@@ -333,11 +341,20 @@ def nim_issue_notice_text(settings: NIMSettings, status_code: int, detail: str =
             "The local adapter is running, but the stored key was rejected or no "
             "longer has access to the selected model."
         )
+        action = (
+            "Paste a fresh key:\n"
+            "  pulsarcode /api"
+        )
     else:
         headline = f"NVIDIA NIM returned HTTP {status_code}."
         meaning = (
             "The local adapter is healthy, but the upstream NIM endpoint did not "
             "complete this request."
+        )
+        action = (
+            "If this keeps happening, paste a fresh key or pick a different model:\n"
+            "  pulsarcode /api          paste a fresh NVIDIA NIM key\n"
+            "  pulsarcode pick          switch to a different model (fresh terminal tab)"
         )
     short_detail = " ".join(str(detail or "").split())
     if len(short_detail) > 420:
@@ -345,13 +362,12 @@ def nim_issue_notice_text(settings: NIMSettings, status_code: int, detail: str =
     return (
         f"{headline}\n\n"
         f"{meaning}\n\n"
-        "Open the pulsarcode API Core panel to paste a fresh key:\n"
-        "  pulsarcode /api\n\n"
-        "Panel flow:\n"
+        f"{action}\n\n"
+        "Panel flow when you paste:\n"
         f"  1. Open {NIM_SETUP_URL}\n"
         "  2. Sign in, or create an NVIDIA account on that page.\n"
         "  3. Click Get API Key in the model page right pane.\n"
-        "  4. Click Generate Key, copy the key that starts with nvapi-, then paste it into pulsarcode.\n\n"
+        "  4. Click Generate Key, copy the key that starts with nvapi-, then paste it.\n\n"
         f"Official NVIDIA quickstart: {NIM_QUICKSTART_URL}\n"
         f"Active model: {settings.nim_model}\n"
         f"Local alias: {settings.public_model}"
