@@ -1,11 +1,34 @@
-# Local Pulsar / pulsarcode  (team distribution)
+# Local Pulsar / pulsarcode
 
-Sovereign Claude Code for teams. Each developer brings their own free NVIDIA NIM
-API key, picks any model from the live Sonar catalog, and gets Claude Code's
-exact UX with the model layer swapped underneath.
+A sovereign Claude Code launcher by **PulsarOS Intelligence Inc.** (Ottawa, Canada).
+
+Bring your own free NVIDIA NIM API key. Pick any model from the live Sonar
+catalog. Get Claude Code's exact UX with the model layer swapped underneath.
 
 The model is commodity GPU. The moat is the files, the skills, the memory, and
-the living files around you. Every model swap leaves the workshop unchanged.
+the living files around the operator. Every model swap leaves the workshop
+unchanged.
+
+License: **AGPL-3.0-or-later** (see `LICENSE`).
+Contribution policy: **source-available, read-only**. See `CONTRIBUTING.md`.
+
+---
+
+## What this is and is not
+
+This repository ships the **launcher** and the **NVIDIA NIM adapter**. That is
+it. The launcher wraps the official Claude Code CLI (which you obtain
+separately from `https://claude.com/claude-code`). The adapter speaks
+Anthropic's public Messages wire format and forwards to NVIDIA NIM's public
+chat-completions endpoint. We ship zero Anthropic source code, zero NVIDIA
+source code, and no API keys. Operators provide their own NVIDIA NIM key,
+free, 1000 credits per account.
+
+The PulsarOS Intelligence Inc. patent portfolio (`.col` model compression,
+AETHER substrate, PHSL runtime, RELAY iPhone companion, BACKBONE skill
+protocol) is **not** in this repository. The launcher is AGPL-3.0 and free
+to fork. The upstream patent stack is sovereign and not covered by this
+license.
 
 ---
 
@@ -232,9 +255,28 @@ AGPL-3.0-or-later. See `LICENSE` in this directory.
 
 Copyright (C) 2026 PulsarOS Intelligence Inc. / Collapse Technologies Inc.
 
+The AGPL-3.0 license means:
+- You may use this software for any purpose, free of charge.
+- If you modify it, your modifications must also be AGPL-3.0.
+- If you run a modified version as a network service to other users, you
+  must offer those users the modified source.
+
+The PulsarOS Intelligence Inc. patent portfolio is upstream of this launcher
+and is not licensed by this repository's AGPL. The launcher itself contains
+no patented technology; it is an installer, an NVIDIA NIM adapter, and a
+model picker.
+
 ---
 
-## Support
+## Support and contributions
 
-- Direct: `yassine@pulsaros.ca`.
-- Issues: open a ticket on this repo.
+This is a **source-available, read-only** project. We do not accept inbound
+pull requests, feature requests, or community contributions on this
+repository. See `CONTRIBUTING.md` for the full posture and rationale.
+
+For bug reports against an official release: `yassine@pulsaros.ca`. We read
+every report. We do not promise fixes.
+
+To modify the code for your own use: fork the repository, change your fork,
+run it. The AGPL-3.0 terms apply to any redistribution or network use of
+your modified version.
