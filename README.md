@@ -1,192 +1,208 @@
-# PulsarCode Team Distribution
+# Local Pulsar / pulsarcode  (team distribution)
 
-**Sovereign Claude Code for Teams** - A free local AI coding system powered by NVIDIA NIM Kimi K2.6.
+Sovereign Claude Code for teams. Each developer brings their own free NVIDIA NIM
+API key, picks any model from the live Sonar catalog, and gets Claude Code's
+exact UX with the model layer swapped underneath.
 
-- **Zero Anthropic API calls** at runtime
-- **NVIDIA NIM Kimi K2.6** as default model (1T MoE, 256K context)
-- **One-command install** for macOS and Linux
-- **Team-ready** with shared configuration support
+The model is commodity GPU. The moat is the files, the skills, the memory, and
+the living files around you. Every model swap leaves the workshop unchanged.
 
 ---
 
-## Quick Start
+## What you get
 
-### 1. Download and Extract
+- One command (`pulsarcode`) that launches Claude Code against any NIM model.
+- A first-launch wizard that walks you through NVIDIA NIM signup, key paste,
+  arrow-key Sonar picker, and model selection.
+- A live catalog of 55+ NIM routes (Kimi K2.6, Qwen 3 Coder 480B, DeepSeek V4,
+  GPT-OSS 120B, Llama 3.3, GLM 5.1, Magistral, plus lightweight options), with
+  dynamic discovery via PulsarOS API Sonar.
+- Persisted model selection at `~/.pulsarcode/active_model` so your choice
+  survives across shells and reboots.
+- Four in-session slash commands: `/api`, `/sonar`, `/pick`, `/model <alias>`.
+- Zero modification of your system claude binary or your `~/.claude` profile.
+  Everything is isolated to `~/.pulsarcode/`.
 
-Download the release ZIP and extract it:
+---
 
-```bash
-unzip pulsarcode-team-v1.0.0.zip
-cd pulsarcode-team-v1.0.0
-```
-
-### 2. Run Installer
+## Install
 
 ```bash
 bash install.sh
 ```
 
-The installer will:
-- Detect your OS (macOS/Linux)
-- Check Python 3.12+ availability
-- Create an isolated Python virtual environment
-- Install all dependencies
-- Guide you through NVIDIA NIM API key setup
-- Add `pulsarcode` to your PATH
+The installer is idempotent. Re-run it any time to refresh the canonical files.
+It never touches your stored NIM key, your active model selection, or your
+Claude Code profile.
 
-### 3. Start Coding
+System requirements:
 
-```bash
-# Navigate to your project
-cd ~/my-project
+- macOS 14+ or Linux (Ubuntu 22.04+ / Debian 13+ / Fedora 40+).
+- Python 3.11 or newer (`brew install python@3.14` on macOS;
+  `apt-get install python3.12 python3.12-venv` on Debian/Ubuntu).
+- Claude Code already installed (`https://claude.com/claude-code`).
+- ~1 GB free disk for the venv.
 
-# Launch pulsarcode (same UX as Claude Code)
-pulsarcode
-
-# Or with a direct prompt
-pulsarcode -p "explain this function"
-```
+Windows is on the roadmap. Use WSL2 today.
 
 ---
 
-## NVIDIA NIM Setup
+## First launch
 
-PulsarCode uses NVIDIA NIM to provide free access to Kimi K2.6. You need a free NVIDIA account.
-
-### First-Time Setup
-
-Run the setup wizard:
+After install, open a new terminal tab so the `PATH` update takes effect, then:
 
 ```bash
-pulsarcode /api
+cd /path/to/your/project
+pulsarcode
 ```
 
-This will:
-1. Open the NVIDIA Kimi K2.6 model page in your browser
-2. Guide you to sign in or create a free NVIDIA account
-3. Generate your API key (starts with `nvapi-`)
-4. Securely store it locally
+Three numbered steps run automatically on first launch:
 
-### Already Have a Key?
+### Step 1: NVIDIA NIM API key
 
-The installer will detect and offer to reuse your existing key. Or run:
+You will see the pulsarcode API Core panel. It tells you to:
 
-```bash
-pulsarcode /api
-```
+1. Open `https://build.nvidia.com`.
+2. Sign in (or create a free NVIDIA account, no credit card needed).
+3. Click `Get API Key` on any model card, then `Generate Key`.
+4. Copy the key (starts with `nvapi-`).
+5. Paste it into the pulsarcode prompt. The key goes to
+   `~/.pulsarcode/nim.key` at mode 0600 and never leaves your Mac except as a
+   bearer header to NVIDIA NIM.
 
-### Verify Your Setup
+Each free NIM key has its own 1000-credit bucket and its own request-per-minute
+limit. Per-developer keys mean every teammate has independent throughput.
 
-```bash
-# Check stack status
-pulsarcode status
+### Step 2: Sonar arrow-key picker
 
-# List available models
-pulsarcode sonar
-```
+The picker shows the live NVIDIA NIM catalog grouped into tiers:
+
+- **CODING TIER**: Kimi K2.6, Kimi K2 Thinking, Kimi K2 Instruct, Qwen 3 Coder
+  480B, Qwen 2.5 Coder 32B / 7B, DeepSeek V4 Pro / Flash, GPT-OSS 120B.
+- **GENERAL TIER**: Llama 3.3 70B, GLM 5.1 / 4.7, Magistral, MiniMax M2.7,
+  Mistral Nemotron, Mixtral, Nemotron families.
+- **LIGHTWEIGHT TIER**: Phi-4 Mini, Gemma 2 2B, Llama 3.1 8B, Codegemma,
+  smaller Nemotron / Llama variants.
+- **OTHER**: uncategorized public routes.
+
+Move with arrow keys, Enter to select, Esc to keep the default. Your choice is
+written to `~/.pulsarcode/active_model` and every subsequent `pulsarcode`
+launch inherits it.
+
+### Step 3: Claude Code launches
+
+The launcher exports an isolated Claude Code config dir, points
+`ANTHROPIC_BASE_URL` at the local NIM adapter on `127.0.0.1:4000`, and execs the
+`claude` binary. From here it is the Claude Code UX you know.
+
+---
+
+## Switching model later
+
+Three paths, each with different scope:
+
+| Command | When | Scope |
+|---|---|---|
+| `pulsarcode pick` | fresh terminal tab | arrow-key picker, persists for next launch |
+| `pulsarcode model <alias>` | shell prompt | persists for next launch (no picker) |
+| `/model <alias>` | inside a Claude Code session | persists for next launch |
+| Claude Code native `/model` | inside a Claude Code session | live, this session only |
+
+The persistence file is always `~/.pulsarcode/active_model`. The launcher
+resolves the alias to the upstream NIM model id via the live Sonar catalog at
+each launch.
 
 ---
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `pulsarcode` | Launch with default NVIDIA NIM Kimi K2.6 |
-| `pulsarcode -p "prompt"` | Single prompt mode |
-| `pulsarcode /api` | Configure NVIDIA NIM API key |
-| `pulsarcode sonar` | List available NVIDIA NIM models |
-| `pulsarcode status` | Check stack health |
-| `pulsarcode help` | Show help |
-
----
-
-## Architecture
-
 ```
-Your Terminal
-      |
-      | pulsarcode
-      v
-[NVIDIA NIM Adapter]  <- Local, on your machine
-      |
-      | HTTPS
-      v
-[NVIDIA NIM Cloud]    <- Kimi K2.6 (free tier)
-```
-
-- **Local adapter**: Lightweight proxy on `127.0.0.1:4000`
-- **No data persistence**: Your code stays local
-- **API key security**: Stored in `~/.pulsarcode/nim.key` (chmod 600)
-
----
-
-## System Requirements
-
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| OS | macOS 14+ / Ubuntu 22.04+ | macOS 15+ / Ubuntu 24.04+ |
-| Python | 3.12 | 3.14 |
-| RAM | 4 GB | 8 GB+ |
-| Disk | 500 MB | 1 GB |
-| Network | Broadband | Broadband |
-
----
-
-## Team Configuration
-
-### Shared Team Defaults
-
-Create `~/.pulsarcode/team_defaults.env`:
-
-```bash
-# Default model for team
-PULSAR_NIM_MODEL=moonshotai/kimi-k2.6
-
-# Timeout settings
-PULSAR_NIM_STREAM_HEADER_TIMEOUT=180
-
-# Optional: Custom API base (for enterprise NVIDIA NIM)
-NVIDIA_NIM_API_BASE=https://integrate.api.nvidia.com/v1
-```
-
-### Per-Project Configuration
-
-Create `.pulsarcode.env` in your project root:
-
-```bash
-# Project-specific model
-PULSAR_NIM_MODEL=qwen/qwen3-coder-480b-a35b-instruct
+pulsarcode                  # launch Claude Code with the active model
+pulsarcode -p "prompt"      # single-prompt mode
+pulsarcode /api             # paste / replace your NVIDIA NIM key
+pulsarcode sonar            # print the full live Sonar catalog (table)
+pulsarcode pick             # arrow-key interactive picker (fresh tab)
+pulsarcode model            # print the current selection
+pulsarcode model <alias>    # set the active model (validates against catalog)
+pulsarcode status           # stack health, active model, NIM key state
+pulsarcode help             # full help
 ```
 
 ---
 
 ## Troubleshooting
 
+### `429 Too Many Requests`
+
+Your NVIDIA NIM key bucket is throttled. Free tier limits are per-key,
+per-developer, not shared across the team. Wait for the rate-limit window to
+roll over (usually one minute) and retry. If you hit 429 repeatedly, you have
+likely exhausted your 1000-credit allotment for the month; rotate your key by
+generating a new one at `https://build.nvidia.com` and running `pulsarcode /api`.
+
+This is a per-developer ceiling. Other teammates on the same project keep
+working on their own keys at their own pace.
+
+### `504 Gateway Timeout` or stalled response
+
+The local NIM adapter waits up to 180 seconds for NVIDIA to return streaming
+headers. If NVIDIA is slow, you see `ping` events on the wire while the wait
+proceeds. If NVIDIA is genuinely down, the adapter returns a clean assistant
+message describing the upstream condition instead of hanging.
+
 ### "No NVIDIA NIM key found"
 
-Run `pulsarcode /api` and follow the setup wizard.
+Run `pulsarcode /api` and paste a fresh key.
 
-### "Rate limited (429)"
+### "Model not recognized"
 
-NVIDIA NIM free tier has rate limits. Wait a moment and retry. For higher limits, consider NVIDIA NIM paid plans.
+Run `pulsarcode sonar` to see the live catalog. If the alias is missing,
+your key may not yet have access to that model. Try a different alias.
 
-### "Model not found"
+### Adapter port already in use
 
-Run `pulsarcode sonar` to see available models. Update your key if needed:
+The launcher tries ports `4000-4010` until it finds a free one. If all ten are
+held by stale adapters from earlier sessions, restart the Mac or kill the
+orphaned `python` processes whose command line includes `nim_anthropic_proxy`.
 
-```bash
-pulsarcode /api
+---
+
+## Architecture
+
+```
+Your terminal
+      |
+      | $ pulsarcode
+      v
+~/.local/bin/pulsarcode  ->  ~/.pulsarcode/canonical/pulsarcode (canonical launcher)
+      |
+      | spawns
+      v
+~/.pulsarcode/venv/bin/python -m proxy.nim_anthropic_proxy   (local Python adapter)
+      |
+      | HTTPS, bearer = your nvapi-... key
+      v
+NVIDIA NIM cloud  (Kimi K2.6 / Qwen / DeepSeek / your choice)
 ```
 
-### Connection Issues
+The adapter on `127.0.0.1:4000` translates Anthropic Messages requests into
+NVIDIA's OpenAI-compatible chat completions and streams responses back to
+Claude Code with SSE keep-alive pings. Your code stays on your Mac except as
+the prompt content sent to NVIDIA, which you authorize with your own key.
 
-Check your internet connection and firewall settings. The adapter needs outbound HTTPS to `integrate.api.nvidia.com`.
+Privacy posture:
+
+- Key file at `~/.pulsarcode/nim.key`, mode 0600, owned by you.
+- No telemetry. No outbound calls to PulsarOS Intelligence Inc. servers.
+- Claude Code's nonessential traffic is disabled (`DISABLE_TELEMETRY=1`,
+  `DISABLE_AUTOUPDATER=1`, `DISABLE_ERROR_REPORTING=1`).
+- Adapter binds `127.0.0.1` only. Other hosts on your LAN cannot reach it.
 
 ---
 
 ## License
 
-AGPL-3.0-or-later. See LICENSE.
+AGPL-3.0-or-later. See `LICENSE` in this directory.
 
 Copyright (C) 2026 PulsarOS Intelligence Inc. / Collapse Technologies Inc.
 
@@ -194,10 +210,6 @@ Copyright (C) 2026 PulsarOS Intelligence Inc. / Collapse Technologies Inc.
 
 ## Support
 
-- **Issues**: Open a ticket in this private repo
-- **Email**: yassine@pulsaros.ca
-- **Docs**: See docs/ directory
-
----
-
-**PulsarOS Intelligence Inc.** - Sovereign Canadian AI Infrastructure
+- Direct: `yassine@pulsaros.ca`.
+- Internal Gitea: `http://10.100.0.1:3000/commander/pulsarcode-team` (sovereign
+  Canadian, WireGuard only).

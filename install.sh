@@ -2,306 +2,281 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 PulsarOS Intelligence Inc. / Collapse Technologies Inc.
 #
-# install.sh - One-command installer for pulsarcode team distribution
-# ===================================================================
-# Usage: bash install.sh
+# Local Pulsar / pulsarcode  -  team distribution installer (Rung 1B, 2026-05-20)
+# =============================================================================
 #
-# This script:
-#   1. Detects OS (macOS/Linux)
-#   2. Checks Python 3.12+ availability
-#   3. Creates isolated venv
-#   4. Installs dependencies
-#   5. Configures NVIDIA NIM API key
-#   6. Sets up pulsarcode command
-#   7. Verifies installation
+# This installer ships the SAME launcher that the maintainer runs on his own
+# Mac. There is no parallel codebase. The installation layout:
+#
+#   ~/.pulsarcode/
+#     canonical/
+#       pulsarcode         <- the launcher you invoke (canonical, not stripped)
+#       proxy/             <- the Sonar catalog + NIM adapter + picker module
+#         __init__.py
+#         nim_anthropic_proxy.py
+#         nim_api_sonar.py
+#         nim_sonar_picker.py
+#       tests/
+#         test_sonar_picker.py
+#       requirements.txt
+#     venv/                <- isolated Python virtual env, owned by this install
+#     nim.key              <- your NVIDIA NIM key (chmod 600, never leaves this Mac)
+#     active_model         <- last alias selected via /model or pulsarcode pick
+#     onboarding_complete  <- sentinel; first-launch wizard runs once
+#     claude_config/       <- isolated Claude Code profile (no leak to ~/.claude)
+#       commands/          <- /api /sonar /pick /model managed slash commands
+#
+#   ~/.local/bin/pulsarcode  -> symlink into ~/.pulsarcode/canonical/pulsarcode
+#
+# After the install completes, the very first `pulsarcode` invocation walks
+# you through: NVIDIA NIM API key paste -> arrow-key Sonar picker -> launch.
+#
+# Re-run this installer any time to refresh the canonical files. It is
+# idempotent and never touches your stored key, active_model selection, or
+# Claude Code profile.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PULSAR_HOME="${PULSAR_HOME:-$HOME/.pulsarcode}"
+CANONICAL_DIR="$PULSAR_HOME/canonical"
 VENV_DIR="$PULSAR_HOME/venv"
-BIN_DIR="$PULSAR_HOME/bin"
-CONFIG_DIR="$PULSAR_HOME/config"
+# FIXED BY Claude 2026-05-20 (Rung 1B): BIN_DIR overridable for smoke tests.
+BIN_DIR="${PULSARCODE_BIN_DIR:-$HOME/.local/bin}"
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Colors (gated on TTY + NO_COLOR)
+if [[ -t 2 && -z "${NO_COLOR:-}" ]]; then
+    EMBER="\033[38;5;208m"
+    GREEN="\033[38;5;46m"
+    DIM="\033[38;5;240m"
+    BOLD="\033[1m"
+    RESET="\033[0m"
+else
+    EMBER=""; GREEN=""; DIM=""; BOLD=""; RESET=""
+fi
 
 print_banner() {
-    echo ""
-    echo "============================================================"
-    echo "  PULSARCODE - Sovereign Claude Code for Your Team"
-    echo "  PulsarOS Intelligence Inc. / Collapse Technologies Inc."
-    echo "============================================================"
-    echo ""
+    cat <<BANNER
+
+${EMBER}+---------------------------------------------------------------------------+${RESET}
+${EMBER}| Local Pulsar  /  pulsarcode  /  team distribution installer               |${RESET}
+${EMBER}+---------------------------------------------------------------------------+${RESET}
+
+  Sovereign Claude Code with NVIDIA NIM as commodity GPU.
+  Your moat: the files, the skills, the memory, the living files in your repo.
+  The model is interchangeable. Pick any Sonar route at first launch.
+
+BANNER
 }
 
 print_step() {
-    echo -e "${BLUE}[STEP $1]${NC} $2"
+    printf "${EMBER}[step %s]${RESET} %s\n" "$1" "$2"
 }
 
-print_success() {
-    echo -e "${GREEN}[OK]${NC} $1"
+print_ok() {
+    printf "  ${GREEN}ok${RESET}  %s\n" "$1"
 }
 
-print_warning() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+print_warn() {
+    printf "  ${DIM}warn${RESET}  %s\n" "$1"
 }
 
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+print_err() {
+    printf "  ${BOLD}error${RESET}  %s\n" "$1" >&2
 }
 
-detect_os() {
-    case "$(uname -s)" in
-        Darwin*) echo "macos" ;;
-        Linux*) echo "linux" ;;
-        *) echo "unknown" ;;
-    esac
-}
-
-detect_arch() {
-    case "$(uname -m)" in
-        arm64|aarch64) echo "arm64" ;;
-        x86_64) echo "x86_64" ;;
-        *) echo "unknown" ;;
-    esac
-}
-
-check_python() {
-    local python_cmd=""
+detect_python() {
+    local cmd
     for cmd in python3.14 python3.13 python3.12 python3; do
-        if command -v "$cmd" &>/dev/null; then
-            local version
-            version="$($cmd --version 2>&1 | sed 's/Python //')"
-            local major minor
+        if command -v "$cmd" >/dev/null 2>&1; then
+            local version major minor
+            version="$("$cmd" --version 2>&1 | sed 's/Python //')"
             major="$(echo "$version" | cut -d. -f1)"
             minor="$(echo "$version" | cut -d. -f2)"
-            if [[ "$major" -ge 3 && "$minor" -ge 12 ]]; then
-                python_cmd="$cmd"
-                break
+            if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
+                printf '%s' "$cmd"
+                return 0
             fi
         fi
     done
-    echo "$python_cmd"
+    printf ''
+    return 1
 }
 
-setup_nim_key() {
-    print_step "5" "Configuring NVIDIA NIM API key"
-    echo ""
-    echo "  NVIDIA NIM provides access to frontier models including Kimi K2.6."
-    echo "  You need a free NVIDIA account and API key."
-    echo ""
-
-    local existing_key=""
-    if [[ -f "$PULSAR_HOME/nim.key" ]]; then
-        existing_key="$(tr -d '\r\n' < "$PULSAR_HOME/nim.key" 2>/dev/null || true)"
+step_1_check_os_and_python() {
+    print_step 1 "checking environment"
+    local os arch
+    case "$(uname -s)" in
+        Darwin*) os="macos" ;;
+        Linux*)  os="linux" ;;
+        *)       os="unknown" ;;
+    esac
+    arch="$(uname -m)"
+    if [[ "$os" == "unknown" ]]; then
+        print_err "unsupported OS (need macOS or Linux). Windows support is Rung 7; use WSL2 for now."
+        exit 1
     fi
-
-    if [[ -n "$existing_key" ]]; then
-        echo "  Existing key found."
-        read -rp "  Use existing key? [Y/n] " confirm
-        if [[ "$confirm" =~ ^[Nn]$ ]]; then
-            existing_key=""
-        else
-            print_success "Using existing NVIDIA NIM key"
-            return 0
-        fi
+    print_ok "OS: $os  arch: $arch"
+    PYTHON_CMD="$(detect_python || true)"
+    if [[ -z "$PYTHON_CMD" ]]; then
+        print_err "Python 3.11+ not found. Install python3.12 or newer."
+        echo "    macOS: brew install python@3.14"
+        echo "    Linux: sudo apt-get install python3.12 python3.12-venv"
+        exit 1
     fi
-
-    if [[ -z "$existing_key" ]]; then
-        echo ""
-        echo "  Setup steps:"
-        echo "    1. Visit: https://build.nvidia.com/moonshotai/kimi-k2.6"
-        echo "    2. Sign in (or create free NVIDIA account)"
-        echo "    3. Click 'Get API Key' then 'Generate Key'"
-        echo "    4. Copy the key (starts with 'nvapi-')"
-        echo ""
-
-        # Try to open browser on macOS
-        if command -v open &>/dev/null; then
-            read -rp "  Open NVIDIA page in browser? [Y/n] " open_browser
-            if [[ ! "$open_browser" =~ ^[Nn]$ ]]; then
-                open "https://build.nvidia.com/moonshotai/kimi-k2.6" &>/dev/null || true
-            fi
-        fi
-
-        echo ""
-        read -rsp "  Paste your NVIDIA NIM API key (hidden): " nim_key
-        echo ""
-
-        # Validate key format
-        if [[ -z "$nim_key" ]]; then
-            print_error "No key provided. You can configure later with: pulsarcode /api"
-            return 1
-        fi
-
-        if [[ ! "$nim_key" =~ ^nvapi- ]]; then
-            print_warning "Key does not start with 'nvapi-'. This may not be a valid NVIDIA NIM key."
-            read -rp "  Continue anyway? [y/N] " continue_anyway
-            if [[ ! "$continue_anyway" =~ ^[Yy]$ ]]; then
-                return 1
-            fi
-        fi
-
-        # Store key securely
-        mkdir -p "$PULSAR_HOME"
-        chmod 700 "$PULSAR_HOME"
-        printf '%s\n' "$nim_key" > "$PULSAR_HOME/nim.key"
-        chmod 600 "$PULSAR_HOME/nim.key"
-        print_success "NVIDIA NIM key stored securely"
-    fi
+    local pyver
+    pyver="$("$PYTHON_CMD" --version 2>&1)"
+    print_ok "Python: $PYTHON_CMD ($pyver)"
 }
 
-verify_installation() {
-    print_step "6" "Verifying installation"
-    echo ""
+step_2_layout() {
+    print_step 2 "creating $PULSAR_HOME layout"
+    mkdir -p "$CANONICAL_DIR" "$CANONICAL_DIR/proxy" "$CANONICAL_DIR/tests"
+    mkdir -p "$BIN_DIR"
+    chmod 700 "$PULSAR_HOME" 2>/dev/null || true
+    print_ok "directories ready"
+}
 
-    local errors=0
+step_3_copy_canonical() {
+    print_step 3 "copying canonical launcher + proxy modules"
+    install -m 0755 "$SCRIPT_DIR/pulsarcode"                "$CANONICAL_DIR/pulsarcode"
+    install -m 0644 "$SCRIPT_DIR/proxy/__init__.py"          "$CANONICAL_DIR/proxy/__init__.py"
+    install -m 0644 "$SCRIPT_DIR/proxy/nim_api_sonar.py"     "$CANONICAL_DIR/proxy/nim_api_sonar.py"
+    install -m 0644 "$SCRIPT_DIR/proxy/nim_anthropic_proxy.py" "$CANONICAL_DIR/proxy/nim_anthropic_proxy.py"
+    install -m 0644 "$SCRIPT_DIR/proxy/nim_sonar_picker.py"  "$CANONICAL_DIR/proxy/nim_sonar_picker.py"
+    install -m 0644 "$SCRIPT_DIR/tests/__init__.py"          "$CANONICAL_DIR/tests/__init__.py"
+    install -m 0644 "$SCRIPT_DIR/tests/test_sonar_picker.py" "$CANONICAL_DIR/tests/test_sonar_picker.py"
+    install -m 0644 "$SCRIPT_DIR/requirements.txt"           "$CANONICAL_DIR/requirements.txt"
+    print_ok "canonical layout in place at $CANONICAL_DIR"
+}
 
-    # Check pulsarcode binary
-    if [[ -x "$BIN_DIR/pulsarcode" ]]; then
-        print_success "pulsarcode command installed"
-    else
-        print_error "pulsarcode command not found"
-        errors=$((errors + 1))
-    fi
-
-    # Check Python venv
+step_4_venv() {
+    print_step 4 "Python virtualenv at $VENV_DIR"
     if [[ -x "$VENV_DIR/bin/python" ]]; then
-        print_success "Python venv ready"
+        local current
+        current="$("$VENV_DIR/bin/python" --version 2>&1)"
+        print_ok "reusing existing venv ($current)"
     else
-        print_error "Python venv not found"
-        errors=$((errors + 1))
+        "$PYTHON_CMD" -m venv "$VENV_DIR"
+        print_ok "venv created"
     fi
+    print_step 5 "installing Python dependencies (quiet)"
+    "$VENV_DIR/bin/pip" install --upgrade --quiet pip setuptools wheel
+    "$VENV_DIR/bin/pip" install --quiet -r "$CANONICAL_DIR/requirements.txt"
+    "$VENV_DIR/bin/pip" install --quiet pytest
+    print_ok "dependencies installed"
+}
 
-    # Check key
-    if [[ -f "$PULSAR_HOME/nim.key" ]]; then
-        print_success "NVIDIA NIM key configured"
+step_6_symlink() {
+    print_step 6 "binary symlink at $BIN_DIR/pulsarcode"
+    local target="$CANONICAL_DIR/pulsarcode"
+    if [[ -L "$BIN_DIR/pulsarcode" ]] && [[ "$(readlink "$BIN_DIR/pulsarcode")" == "$target" ]]; then
+        print_ok "symlink already correct"
     else
-        print_warning "NVIDIA NIM key not yet configured"
-        print_warning "Run: pulsarcode /api"
+        rm -f "$BIN_DIR/pulsarcode" 2>/dev/null || true
+        ln -s "$target" "$BIN_DIR/pulsarcode"
+        print_ok "symlink: $BIN_DIR/pulsarcode -> $target"
     fi
+}
 
-    echo ""
-    if [[ $errors -eq 0 ]]; then
-        print_success "Installation complete!"
-        echo ""
-        echo "  Quick start:"
-        echo "    cd <your-project-directory>"
-        echo "    pulsarcode"
-        echo ""
-        echo "  Or with a direct prompt:"
-        echo "    pulsarcode -p 'explain this code'"
-        echo ""
-        echo "  Need help?"
-        echo "    pulsarcode help"
-        echo "    pulsarcode /api     # Reconfigure NVIDIA NIM key"
-        echo "    pulsarcode sonar    # List available models"
-        echo ""
+step_7_path_in_shell_rc() {
+    print_step 7 "ensuring $BIN_DIR is on PATH"
+    if [[ "${PULSARCODE_SKIP_PATH_EXPORT:-0}" == "1" ]]; then
+        print_ok "skipped (PULSARCODE_SKIP_PATH_EXPORT=1)"
         return 0
-    else
-        print_error "Installation had $errors error(s). Check output above."
-        return 1
     fi
+    if [[ ":$PATH:" == *":$BIN_DIR:"* ]]; then
+        print_ok "PATH already contains $BIN_DIR"
+        return 0
+    fi
+    local shell_rc=""
+    case "${SHELL:-}" in
+        */zsh)  shell_rc="$HOME/.zshrc" ;;
+        */bash) shell_rc="$HOME/.bashrc" ;;
+        */fish) shell_rc="$HOME/.config/fish/config.fish" ;;
+    esac
+    if [[ -z "$shell_rc" ]]; then
+        print_warn "unknown shell; add $BIN_DIR to your PATH manually"
+        return 0
+    fi
+    if [[ -f "$shell_rc" ]] && grep -q "$BIN_DIR" "$shell_rc" 2>/dev/null; then
+        print_ok "$shell_rc already references $BIN_DIR"
+        return 0
+    fi
+    # FIXED BY Claude 2026-05-20 (Rung 1B): append a single export PATH line,
+    # idempotent. Never edits an existing PATH export, only appends a new one.
+    if [[ ! -f "$shell_rc" ]]; then
+        touch "$shell_rc"
+    fi
+    if [[ "$shell_rc" == *config.fish ]]; then
+        printf '\n# Local Pulsar / pulsarcode\nset -gx PATH "%s" $PATH\n' "$BIN_DIR" >> "$shell_rc"
+    else
+        printf '\n# Local Pulsar / pulsarcode\nexport PATH="%s:$PATH"\n' "$BIN_DIR" >> "$shell_rc"
+    fi
+    print_ok "appended PATH export to $shell_rc"
+    print_warn "open a new terminal tab or run: source $shell_rc"
+}
+
+step_8_smoke_test() {
+    print_step 8 "smoke test (picker tier classifier + active_model round-trip)"
+    if ! cd "$CANONICAL_DIR"; then
+        print_warn "could not cd into $CANONICAL_DIR; skipping smoke test"
+        return 0
+    fi
+    if PYTHONPATH=. "$VENV_DIR/bin/python" -m pytest tests/test_sonar_picker.py -q >/tmp/pulsarcode_install_smoke.log 2>&1; then
+        print_ok "12/12 tests passed (see /tmp/pulsarcode_install_smoke.log for detail)"
+    else
+        print_warn "smoke tests failed; install is usable but flag this to the maintainer"
+        print_warn "log at /tmp/pulsarcode_install_smoke.log"
+    fi
+    cd - >/dev/null
+}
+
+step_9_print_next() {
+    cat <<NEXT
+
+${GREEN}install complete.${RESET}
+
+  Next step: open a new terminal tab and run:
+
+    ${BOLD}cd /path/to/your/project${RESET}
+    ${BOLD}pulsarcode${RESET}
+
+  The first launch walks you through three steps:
+
+    1. Paste a free NVIDIA NIM API key
+       Generate it at https://build.nvidia.com (free, 1000 credits per key,
+       no card required). Each teammate brings their OWN key. Your bucket,
+       your throughput.
+
+    2. Arrow-key Sonar picker
+       55+ models grouped by tier (CODING, GENERAL, LIGHTWEIGHT, OTHER).
+       Pick one. Esc keeps the default (Kimi K2.6).
+
+    3. Claude Code launches with your chosen model.
+
+  Switch model later:
+    /model <alias>          inside a session (persists for next launch)
+    Claude Code's /model    inside a session (live, this session only)
+    pulsarcode pick         fresh terminal tab (arrow-key picker)
+    pulsarcode /api         re-paste your NIM key any time
+
+  The launcher never modifies your system claude binary or your ~/.claude
+  profile. Everything is isolated to $PULSAR_HOME.
+
+NEXT
 }
 
 main() {
     print_banner
-
-    OS="$(detect_os)"
-    ARCH="$(detect_arch)"
-
-    print_step "1" "Detecting environment"
-    echo "  OS: $OS"
-    echo "  Arch: $ARCH"
-    echo "  Install dir: $PULSAR_HOME"
-
-    if [[ "$OS" == "unknown" ]]; then
-        print_error "Unsupported OS. pulsarcode supports macOS and Linux."
-        exit 1
-    fi
-
-    print_step "2" "Checking Python"
-    PYTHON_CMD="$(check_python)"
-    if [[ -z "$PYTHON_CMD" ]]; then
-        print_error "Python 3.12+ not found. Please install Python 3.12 or later."
-        echo "  macOS: brew install python@3.14"
-        echo "  Linux: sudo apt install python3.12"
-        exit 1
-    fi
-    print_success "Found $PYTHON_CMD"
-
-    print_step "3" "Creating isolated environment"
-    if [[ -d "$VENV_DIR" ]]; then
-        print_warning "Existing venv found at $VENV_DIR"
-        read -rp "  Reinstall? [y/N] " reinstall
-        if [[ "$reinstall" =~ ^[Yy]$ ]]; then
-            rm -rf "$VENV_DIR"
-            "$PYTHON_CMD" -m venv "$VENV_DIR"
-            print_success "Fresh venv created"
-        else
-            print_success "Using existing venv"
-        fi
-    else
-        "$PYTHON_CMD" -m venv "$VENV_DIR"
-        print_success "Venv created at $VENV_DIR"
-    fi
-
-    print_step "4" "Installing dependencies"
-    echo "  This may take a few minutes..."
-    "$VENV_DIR/bin/pip" install --upgrade pip setuptools wheel &>/dev/null || true
-
-    # Install from requirements
-    if [[ -f "$SCRIPT_DIR/requirements.txt" ]]; then
-        "$VENV_DIR/bin/pip" install -r "$SCRIPT_DIR/requirements.txt" &>/dev/null || {
-            print_error "Failed to install dependencies"
-            exit 1
-        }
-    fi
-
-    # Install pulsarcode package
-    if [[ -f "$SCRIPT_DIR/setup.py" || -f "$SCRIPT_DIR/pyproject.toml" ]]; then
-        "$VENV_DIR/bin/pip" install "$SCRIPT_DIR" &>/dev/null || {
-            print_warning "Package install had issues, but core tools should work"
-        }
-    fi
-
-    print_success "Dependencies installed"
-
-    # Setup directories
-    mkdir -p "$BIN_DIR" "$CONFIG_DIR"
-
-    # Install pulsarcode command
-    cp "$SCRIPT_DIR/pulsarcode" "$BIN_DIR/pulsarcode"
-    chmod +x "$BIN_DIR/pulsarcode"
-
-    # Add to PATH if not already there
-    if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
-        SHELL_RC=""
-        case "$SHELL" in
-            */zsh) SHELL_RC="$HOME/.zshrc" ;;
-            */bash) SHELL_RC="$HOME/.bashrc" ;;
-            */fish) SHELL_RC="$HOME/.config/fish/config.fish" ;;
-        esac
-
-        if [[ -n "$SHELL_RC" && -f "$SHELL_RC" ]]; then
-            if ! grep -q "pulsarcode" "$SHELL_RC" 2>/dev/null; then
-                echo "export PATH=\"$BIN_DIR:\$PATH\"" >> "$SHELL_RC"
-                print_success "Added pulsarcode to PATH in $SHELL_RC"
-                print_warning "Run 'source $SHELL_RC' or restart your terminal to use pulsarcode"
-            fi
-        fi
-    fi
-
-    # Setup NVIDIA NIM key
-    setup_nim_key || true
-
-    # Verify
-    verify_installation
+    step_1_check_os_and_python
+    step_2_layout
+    step_3_copy_canonical
+    step_4_venv
+    step_6_symlink
+    step_7_path_in_shell_rc
+    step_8_smoke_test
+    step_9_print_next
 }
 
 main "$@"

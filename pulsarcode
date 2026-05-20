@@ -2,326 +2,1152 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 PulsarOS Intelligence Inc. / Collapse Technologies Inc.
 #
-# pulsarcode - Team Distribution Edition
-# ======================================
-# Simplified launcher for team distribution.
-# Routes to NVIDIA NIM Kimi K2.6 by default.
+# pulsarcode  -  Claude Code-compatible launcher for Kimi K2.6.
+# ============================================================================
 #
-# Usage:
-#   pulsarcode                    # Interactive mode
-#   pulsarcode -p "prompt"        # Single prompt
-#   pulsarcode /api               # API key setup
-#   pulsarcode sonar              # List models
-#   pulsarcode status             # Check status
-#   pulsarcode help               # Show help
+# Default as of 2026-05-19: `pulsarcode` behaves like Claude Code, but routes
+# through a tiny local Anthropic-to-NVIDIA-NIM adapter instead of Anthropic.
+# Local PHSL research modes remain available only when explicitly named.
+#
+# Sovereign assets on this Mac (operator's portfolio):
+#   - Kimi K2.6 INT2 .col on /Volumes/PulsarOS/kimi-k2_6/ (1T MoE, 9.74x).
+#     Research demo only on this 8 GB Mac (Apple Metal 4 GB cap blows up
+#     on Claude Code's ~6k-token first-prompt envelope).
+#   - Gemma 4 31B INT2 .col on /Users/.../03_COLLAPSE_TECHNOLOGIES.../col/
+#     registry/models/gemma4-31b-FULL-neutron-int2.col (5.92 GB, 9.84x
+#     measured, DeepMind certificate signed). Server build PLANNED.
+#
+# Third-party fallback (downloaded without standalone authorization on
+# 2026-05-04 night, awaiting operator direction on retain-or-purge):
+#   - Qwen 2.5 Coder 7B 4-bit MLX (~4 GB cached at ~/.cache/huggingface/...)
+# Explicit remote default restored 2026-05-19 at operator direction:
+#   - NVIDIA NIM Kimi K2.6 via model alias nim-kimi.
+#   - Launch with `pulsarcode` exactly like Claude Code.
 
 set -euo pipefail
 
-# --- Configuration ---
+SELF="$(readlink -f "$0" 2>/dev/null || python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$0")"
+# FIXED BY Claude 2026-05-20 (Rung 1B): layout-flexible PROJECT_DIR.
+# Canonical layout : <root>/cli/pulsarcode with sibling <root>/proxy/
+# Team-dist layout : <root>/pulsarcode      with sibling <root>/proxy/
+# The installer places the symlink-target launcher at one of these two paths.
+# We auto-detect by checking which sibling of the script directory holds proxy/.
+SELF_DIR="$(dirname "$SELF")"
+if [[ -d "$SELF_DIR/../proxy" ]]; then
+    PROJECT_DIR="$(cd "$SELF_DIR/.." && pwd)"
+elif [[ -d "$SELF_DIR/proxy" ]]; then
+    PROJECT_DIR="$(cd "$SELF_DIR" && pwd)"
+else
+    PROJECT_DIR="$(cd "$SELF_DIR/.." && pwd)"
+fi
 PULSAR_HOME="${PULSAR_HOME:-$HOME/.pulsarcode}"
+mkdir -p "$PULSAR_HOME/claude_config"
+
+CLAUDE_BIN=""
+for cand in "$HOME/.local/bin/claude" "$HOME/.claude/bin/claude" "/usr/local/bin/claude" "/opt/homebrew/bin/claude"; do
+    if [[ -x "$cand" ]]; then CLAUDE_BIN="$cand"; break; fi
+done
+if [[ -z "$CLAUDE_BIN" ]]; then CLAUDE_BIN="$(command -v claude 2>/dev/null || true)"; fi
+if [[ -z "$CLAUDE_BIN" ]]; then
+    echo "pulsarcode: no Claude Code binary found." >&2
+    exit 127
+fi
+
+PHSL_BASE="${PULSAR_PHSL_BASE:-http://127.0.0.1:8000}"
+FAST_BASE="${PULSAR_FAST_BASE:-http://127.0.0.1:8001}"
+KIMI_ROOT="${PULSAR_ROOT:-/Volumes/PulsarOS/kimi-k2_6}"
+LITELLM_HOST="${PULSAR_LITELLM_HOST:-127.0.0.1}"
+LITELLM_PORT="${PULSAR_LITELLM_PORT:-4000}"
+LITELLM_BASE="${PULSAR_LITELLM_BASE:-http://${LITELLM_HOST}:${LITELLM_PORT}}"
+LITELLM_CONFIG="${PROJECT_DIR}/proxy/litellm_config.yaml"
+PULSAR_RUN_DIR="${PULSAR_RUN_DIR:-$PULSAR_HOME/run}"
+LITELLM_PID_FILE="${PULSAR_LITELLM_PID_FILE:-$PULSAR_RUN_DIR/pulsar-nim-proxy.pid}"
+LITELLM_LOG_FILE="${PULSAR_LITELLM_LOG_FILE:-${PULSAR_NIM_PROXY_LOG_FILE:-/dev/null}}"
+# FIXED BY Claude 2026-05-20 (Rung 1B): venv path discovery.
+# Order of preference:
+#   1. $PULSAR_VENV (operator override, e.g. for CI)
+#   2. ~/.kimi-local-venv (the operator's canonical install)
+#   3. ~/.pulsarcode/venv (the team-distribution install layout)
+# When team-dist runs on a teammate's machine, only path 3 exists and is used.
+# When the operator runs on his Mac, path 2 wins and his PHSL/Gemma deps stay
+# bound to the same venv as before. Both layouts coexist cleanly.
+if [[ -z "${PULSAR_VENV:-}" ]]; then
+    if [[ -x "$HOME/.kimi-local-venv/bin/python" ]]; then
+        PULSAR_VENV="$HOME/.kimi-local-venv"
+    elif [[ -x "$HOME/.pulsarcode/venv/bin/python" ]]; then
+        PULSAR_VENV="$HOME/.pulsarcode/venv"
+    else
+        PULSAR_VENV="$HOME/.kimi-local-venv"
+    fi
+fi
 NIM_KEY_FILE="${PULSAR_NIM_KEY_FILE:-$PULSAR_HOME/nim.key}"
 NIM_MODEL_ID="${PULSAR_NIM_MODEL:-moonshotai/kimi-k2.6}"
 NIM_PUBLIC_MODEL="${PULSAR_NIM_PUBLIC_MODEL:-nim-kimi}"
+NIM_SELECTOR_DEFAULT_MODEL="${PULSAR_NIM_SELECTOR_DEFAULT_MODEL:-claude-nim-kimi}"
+NIM_SELECTOR_THINKING_MODEL="${PULSAR_NIM_SELECTOR_THINKING_MODEL:-claude-nim-kimi-k2-thinking}"
+NIM_SELECTOR_CODER_MODEL="${PULSAR_NIM_SELECTOR_CODER_MODEL:-claude-nim-qwen-qwen3-coder-480b-a35b-instruct}"
+NIM_SELECTOR_INSTRUCT_MODEL="${PULSAR_NIM_SELECTOR_INSTRUCT_MODEL:-claude-nim-kimi-k2-instruct}"
+NIM_MODEL_URL="${PULSAR_NIM_MODEL_URL:-https://build.nvidia.com/moonshotai/kimi-k2.6}"
+NIM_DOCS_URL="${PULSAR_NIM_DOCS_URL:-https://docs.api.nvidia.com/nim/docs/api-quickstart}"
 NIM_API_BASE="${NVIDIA_NIM_API_BASE:-https://integrate.api.nvidia.com/v1}"
 
-# Claude Code binary detection
-find_claude() {
-    local cand=""
-    for cand in "$HOME/.local/bin/claude" "$HOME/.claude/bin/claude" "/usr/local/bin/claude" "/opt/homebrew/bin/claude"; do
-        if [[ -x "$cand" ]]; then
-            echo "$cand"
+export PULSAR_NIM_MODEL="$NIM_MODEL_ID"
+export PULSAR_NIM_PUBLIC_MODEL="$NIM_PUBLIC_MODEL"
+export NVIDIA_NIM_API_BASE="$NIM_API_BASE"
+
+# FIXED BY Claude 2026-05-20 (Rung 1+2): per-operator active-model persistence.
+# Picker writes the chosen alias here; every subsequent launch inherits it
+# until the operator re-picks via `pulsarcode pick` or `/model <alias>`.
+ACTIVE_MODEL_FILE="${PULSAR_ACTIVE_MODEL_FILE:-$PULSAR_HOME/active_model}"
+ONBOARDING_SENTINEL="${PULSAR_ONBOARDING_SENTINEL:-$PULSAR_HOME/onboarding_complete}"
+
+read_active_alias() {
+    if [[ -f "$ACTIVE_MODEL_FILE" ]]; then
+        tr -d '\r\n' < "$ACTIVE_MODEL_FILE"
+    fi
+}
+
+resolve_alias_to_upstream() {
+    local alias="$1"
+    if [[ -z "$alias" ]]; then return 1; fi
+    if [[ ! -x "$PULSAR_VENV/bin/python" ]]; then return 1; fi
+    PYTHONPATH="$PROJECT_DIR" "$PULSAR_VENV/bin/python" - "$alias" <<'PY' 2>/dev/null
+import os
+import sys
+from proxy.nim_api_sonar import (
+    DEFAULT_API_BASE,
+    DEFAULT_PUBLIC_MODEL,
+    resolve_model_alias,
+)
+
+key = (
+    os.environ.get("NVIDIA_NIM_API_KEY")
+    or os.environ.get("NVIDIA_API_KEY")
+    or os.environ.get("NVIDIA_NIM_KEY")
+    or ""
+)
+api_base = os.environ.get("NVIDIA_NIM_API_BASE", DEFAULT_API_BASE)
+public_default = os.environ.get("PULSAR_NIM_PUBLIC_MODEL", DEFAULT_PUBLIC_MODEL)
+print(resolve_model_alias(sys.argv[1], api_base=api_base, api_key=key, public_default=public_default))
+PY
+}
+
+apply_active_model() {
+    local alias=""
+    alias="$(read_active_alias 2>/dev/null || true)"
+    if [[ -z "$alias" ]]; then return 0; fi
+    local upstream=""
+    upstream="$(resolve_alias_to_upstream "$alias" 2>/dev/null || true)"
+    if [[ -n "$upstream" && "$upstream" != "None" ]]; then
+        NIM_MODEL_ID="$upstream"
+        NIM_PUBLIC_MODEL="$alias"
+        NIM_SELECTOR_DEFAULT_MODEL="claude-${alias}"
+        export PULSAR_NIM_MODEL="$NIM_MODEL_ID"
+        export PULSAR_NIM_PUBLIC_MODEL="$NIM_PUBLIC_MODEL"
+        export PULSAR_NIM_SELECTOR_DEFAULT_MODEL="$NIM_SELECTOR_DEFAULT_MODEL"
+    fi
+}
+
+phsl_alive() { curl -s -o /dev/null -m 3 -w "%{http_code}" "${PHSL_BASE}/healthz" 2>/dev/null | grep -q '^2'; }
+fast_alive() { curl -s -o /dev/null -m 3 -w "%{http_code}" "${FAST_BASE}/v1/models" 2>/dev/null | grep -q '^2'; }
+litellm_alive() { curl -s -o /dev/null -m 3 -w "%{http_code}" "${LITELLM_BASE}/v1/models" 2>/dev/null | grep -q '^2'; }
+litellm_has_nim_model() { curl -s -m 3 "${LITELLM_BASE}/v1/models" 2>/dev/null | grep -q '"id"[[:space:]]*:[[:space:]]*"'"$NIM_SELECTOR_DEFAULT_MODEL"'"'; }
+catalog_payload_is_current() {
+    local payload
+    payload="$(cat)"
+    printf '%s' "$payload" | grep -q '"first_id"[[:space:]]*:[[:space:]]*"claude-nim-kimi"' \
+        && printf '%s' "$payload" | grep -q '"id"[[:space:]]*:[[:space:]]*"claude-nim-qwen-qwen3-coder-480b-a35b-instruct"' \
+        && ! printf '%s' "$payload" | grep -q 'about-nvidia'
+}
+base_has_current_adapter() {
+    local base="$1"
+    curl -s -m 3 "${base}/v1/models" 2>/dev/null | catalog_payload_is_current \
+        && curl -s -m 3 "${base}/healthz" 2>/dev/null | grep -q '"adapter_protocol"[[:space:]]*:[[:space:]]*"nim-stream-ping-v2"'
+}
+litellm_has_sonar_catalog() { base_has_current_adapter "$LITELLM_BASE"; }
+port_has_sonar_catalog() { base_has_current_adapter "http://${LITELLM_HOST}:$1"; }
+
+port_is_free() {
+    local port="$1"
+    local py=""
+    if [[ -x "$PULSAR_VENV/bin/python" ]]; then
+        py="$PULSAR_VENV/bin/python"
+    else
+        py="$(command -v python3 2>/dev/null || true)"
+    fi
+    if [[ -z "$py" ]]; then
+        return 1
+    fi
+    "$py" - "$LITELLM_HOST" "$port" <<'PY'
+import socket
+import sys
+
+host = sys.argv[1]
+port = int(sys.argv[2])
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
+    sock.bind((host, port))
+except OSError:
+    sys.exit(1)
+finally:
+    sock.close()
+sys.exit(0)
+PY
+}
+
+switch_to_fresh_nim_port() {
+    local port=""
+    for port in $(seq 4001 4010); do
+        if port_is_free "$port"; then
+            LITELLM_PORT="$port"
+            LITELLM_BASE="http://${LITELLM_HOST}:${LITELLM_PORT}"
+            LITELLM_PID_FILE="${PULSAR_LITELLM_PID_FILE:-$PULSAR_RUN_DIR/pulsar-nim-proxy-${LITELLM_PORT}.pid}"
             return 0
         fi
     done
-    command -v claude 2>/dev/null || true
+    return 1
 }
 
-CLAUDE_BIN="$(find_claude)"
+switch_to_existing_sonar_port() {
+    local port=""
+    for port in $(seq 4001 4010); do
+        if port_has_sonar_catalog "$port"; then
+            LITELLM_PORT="$port"
+            LITELLM_BASE="http://${LITELLM_HOST}:${LITELLM_PORT}"
+            LITELLM_PID_FILE="${PULSAR_LITELLM_PID_FILE:-$PULSAR_RUN_DIR/pulsar-nim-proxy-${LITELLM_PORT}.pid}"
+            return 0
+        fi
+    done
+    return 1
+}
 
-# --- Key Management ---
-load_nim_key() {
+args_have_settings() {
+    local arg=""
+    for arg in "$@"; do
+        if [[ "$arg" == "--settings" || "$arg" == --settings=* ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+write_nim_model_settings() {
+    local settings_file="$PULSAR_RUN_DIR/nim-model-settings-${LITELLM_PORT}.json"
+    if [[ ! -x "$PULSAR_VENV/bin/python" ]]; then
+        return 1
+    fi
+    mkdir -p "$PULSAR_RUN_DIR" 2>/dev/null || return 1
+    if ! PYTHONPATH="$PROJECT_DIR" "$PULSAR_VENV/bin/python" -m proxy.nim_api_sonar \
+        --api-base "$NIM_API_BASE" \
+        --public-model "$NIM_PUBLIC_MODEL" \
+        --claude-settings > "$settings_file"; then
+        return 1
+    fi
+    chmod 600 "$settings_file" 2>/dev/null || true
+    printf '%s' "$settings_file"
+}
+
+_write_managed_command() {
+    # _write_managed_command <file> <heredoc-payload-on-stdin>
+    # Idempotent: writes only if file is missing OR already managed by pulsarcode.
+    # Never clobbers an operator-customized file.
+    local file="$1"
+    if [[ -f "$file" ]] && ! grep -q "Managed by pulsarcode" "$file" 2>/dev/null; then
+        return 0
+    fi
+    cat > "$file"
+}
+
+install_api_slash_command() {
+    # FIXED BY Claude 2026-05-20 (Rung 2): four managed slash commands now installed.
+    # /api    re-paste NVIDIA NIM key via the cinematic setup panel
+    # /sonar  show the API Sonar catalog (table form, safe inside Claude Code)
+    # /pick   launch the interactive arrow-key picker in a fresh terminal tab
+    # /model  switch the active model alias without leaving the session
+    local commands_dir="$PULSAR_HOME/claude_config/commands"
+    mkdir -p "$commands_dir" 2>/dev/null || return 0
+
+    _write_managed_command "$commands_dir/api.md" <<'API_COMMAND'
+---
+description: Open the Local Pulsar NVIDIA NIM API key setup panel.
+allowed-tools: Bash
+argument-hint: [check]
+---
+
+Run the local setup panel and print its output:
+
+```bash
+pulsarcode /api
+```
+
+If this shell cannot accept terminal input, tell the operator to run `pulsarcode /api` in a normal terminal tab.
+
+Managed by pulsarcode.
+API_COMMAND
+
+    _write_managed_command "$commands_dir/sonar.md" <<'SONAR_COMMAND'
+---
+description: Show the NVIDIA NIM model catalog exposed through Local Pulsar API Sonar.
+allowed-tools: Bash
+argument-hint: [filter]
+---
+
+Run the catalog command and print its output:
+
+```bash
+pulsarcode sonar
+```
+
+Two ways to switch model:
+  Live (this session only): use Claude Code's built-in `/model` picker. The
+  adapter advertises every Sonar catalog entry as an availableModels alias.
+  Persisted (next launch onwards): run `/model <alias>` (our custom command),
+  which writes ~/.pulsarcode/active_model and is inherited by every future
+  `pulsarcode` launch in any shell.
+For the arrow-key interactive picker, open a fresh terminal tab and run
+`pulsarcode pick`.
+
+Managed by pulsarcode.
+SONAR_COMMAND
+
+    _write_managed_command "$commands_dir/pick.md" <<'PICK_COMMAND'
+---
+description: Launch the Local Pulsar API Sonar interactive arrow-key picker (fresh terminal tab).
+allowed-tools: Bash
+argument-hint: []
+---
+
+Tell the operator to open a fresh terminal tab and run:
+
+```bash
+pulsarcode pick
+```
+
+The picker is keyboard-driven (arrows + Enter + Esc) and cannot run inside a Claude Code session because Claude Code captures stdin for tool output. The picker persists the choice to `~/.pulsarcode/active_model`; the next `pulsarcode` launch inherits it.
+
+Managed by pulsarcode.
+PICK_COMMAND
+
+    _write_managed_command "$commands_dir/model.md" <<'MODEL_COMMAND'
+---
+description: Persist the Local Pulsar active model alias for the next launch (sticky).
+allowed-tools: Bash
+argument-hint: <alias>
+---
+
+Run the persist command and print its output:
+
+```bash
+pulsarcode model "$ARGUMENTS"
+```
+
+This is the STICKY model selection. It writes the alias to
+~/.pulsarcode/active_model and every future `pulsarcode` launch in any shell
+inherits it. For a LIVE in-session switch that affects only this session,
+use Claude Code's built-in `/model` picker instead. If no alias is given,
+print the current selection and remind the operator to run `/sonar` or
+`pulsarcode pick` to see options.
+
+Managed by pulsarcode.
+MODEL_COMMAND
+}
+
+matrix_line() {
+    local width="$1"
+    local chars="01PULSARCODEKIMINIMVECTORLOCAL"
+    local out=""
+    local idx=0
+    if (( width > 96 )); then width=96; fi
+    if (( width < 42 )); then width=42; fi
+    for ((i = 0; i < width; i++)); do
+        idx=$((RANDOM % ${#chars}))
+        out+="${chars:idx:1}"
+    done
+    printf '%s\n' "$out"
+}
+
+matrix_intro() {
+    if [[ "${PULSAR_NO_ANIMATION:-0}" == "1" || -n "${NO_COLOR:-}" || ! -t 2 ]]; then
+        return 0
+    fi
+    local argv=" $* "
+    if [[ "$argv" == *" --version "* || "$argv" == *" -v "* || "$argv" == *" --help "* || "$argv" == *" -h "* || "$argv" == *" -p "* || "$argv" == *" --print "* ]]; then
+        return 0
+    fi
+    local cols
+    cols="$(tput cols 2>/dev/null || printf '80')"
+    local width=$((cols - 6))
+    printf '\033[?25l' >&2
+    for frame in $(seq 1 12); do
+        printf '\033[38;5;34m%s\033[0m\r' "$(matrix_line "$width")" >&2
+        sleep 0.025
+    done
+    printf '\033[2K\r' >&2
+    printf '\033[38;5;46m%s\033[0m\n' "pulsarcode online: local terminal shell linked to NVIDIA NIM" >&2
+    printf '\033[?25h' >&2
+}
+
+mask_key_source() {
+    local key="$1"
+    if (( ${#key} <= 12 )); then
+        printf '%s' "present"
+        return 0
+    fi
+    printf '%s...%s' "${key:0:8}" "${key: -4}"
+}
+
+current_nim_key() {
     if [[ -n "${NVIDIA_NIM_API_KEY:-}" ]]; then
+        printf '%s' "$NVIDIA_NIM_API_KEY"
         return 0
     fi
     if [[ -n "${NVIDIA_NIM_KEY:-}" ]]; then
-        export NVIDIA_NIM_API_KEY="$NVIDIA_NIM_KEY"
+        printf '%s' "$NVIDIA_NIM_KEY"
         return 0
     fi
     if [[ -n "${NVIDIA_API_KEY:-}" ]]; then
-        export NVIDIA_NIM_API_KEY="$NVIDIA_API_KEY"
+        printf '%s' "$NVIDIA_API_KEY"
         return 0
     fi
     if [[ -f "$NIM_KEY_FILE" ]]; then
-        local key
-        key="$(tr -d '\r\n' < "$NIM_KEY_FILE")"
-        if [[ -n "$key" ]]; then
-            export NVIDIA_NIM_API_KEY="$key"
-            return 0
-        fi
+        tr -d '\r\n' < "$NIM_KEY_FILE"
+        return 0
     fi
     return 1
 }
 
-# --- API Setup Panel ---
 print_api_panel() {
-    cat <<'PANEL' >&2
+    local reason="${1:-manual update}"
+    local key_state="not stored"
+    local existing=""
+    existing="$(current_nim_key 2>/dev/null || true)"
+    if [[ -n "$existing" ]]; then
+        key_state="$(mask_key_source "$existing")"
+    fi
+    cat <<API_PANEL >&2
 
 +------------------------------------------------------------------------------+
-|  PULSARCODE - NVIDIA NIM API Key Setup                                       |
+| pulsarcode API Core                                                           |
+| NVIDIA NIM key setup for the default Kimi K2.6 route                          |
 +------------------------------------------------------------------------------+
+ Trigger          : $reason
+ Runtime model    : $NIM_MODEL_ID
+ Local alias      : $NIM_PUBLIC_MODEL
+ API endpoint     : $NIM_API_BASE/chat/completions
+ Stored key       : $key_state
+ Key file         : $NIM_KEY_FILE
 
-  Step 1: Visit https://build.nvidia.com/moonshotai/kimi-k2.6
-  Step 2: Sign in or create a free NVIDIA account
-  Step 3: Click "Get API Key" then "Generate Key"
-  Step 4: Copy the key (starts with "nvapi-")
-  Step 5: Paste it below
+ Steps:
+  1. Open $NIM_MODEL_URL
+  2. Sign in. If you do not have an NVIDIA account, create one from that page.
+  3. On the model page, click Get API Key in the right pane.
+  4. If prompted, complete Developer Program sign in, then click Generate Key.
+  5. Copy the key that starts with nvapi- and paste it below.
 
-  Your key is stored locally in ~/.pulsarcode/nim.key (chmod 600)
-  It is never sent anywhere except to NVIDIA NIM.
+ Official quickstart:
+  $NIM_DOCS_URL
 
+ Tip:
+  Type pulsarcode /api whenever you want to replace the stored key.
+  Inside the isolated Claude Code profile, the local /api command is installed
+  and routes back to this same setup panel when custom commands are available.
 +------------------------------------------------------------------------------+
-
-PANEL
+API_PANEL
 }
 
-setup_nim_key_interactive() {
-    print_api_panel
-
+store_nim_key_interactive() {
+    local reason="${1:-manual update}"
+    local existing=""
+    local key=""
+    local confirm=""
+    print_api_panel "$reason"
     if [[ ! -t 0 ]]; then
-        echo "pulsarcode: This shell cannot accept input." >&2
-        echo "  Run in a normal terminal: pulsarcode /api" >&2
+        cat <<'NO_TTY' >&2
+pulsarcode: this shell cannot accept hidden input.
+Run this in a normal terminal tab:
+  pulsarcode /api
+NO_TTY
         return 2
     fi
-
-    read -rsp "  Paste NVIDIA NIM API key: " key
-    echo "" >&2
-
+    existing="$(current_nim_key 2>/dev/null || true)"
+    if [[ -n "$existing" ]]; then
+        printf '%s' "Replace stored key now? [y/N] " >&2
+        read -r confirm
+        case "$confirm" in
+            y|Y|yes|YES) ;;
+            *)
+                export NVIDIA_NIM_API_KEY="$existing"
+                export NVIDIA_NIM_KEY="${NVIDIA_NIM_KEY:-$existing}"
+                export NVIDIA_API_KEY="${NVIDIA_API_KEY:-$existing}"
+                printf '%s\n' "pulsarcode: keeping existing NVIDIA NIM key." >&2
+                return 0
+                ;;
+        esac
+    fi
+    if command -v open >/dev/null 2>&1; then
+        printf '%s' "Open the NVIDIA Kimi K2.6 model page now? [Y/n] " >&2
+        read -r confirm
+        case "$confirm" in
+            n|N|no|NO) ;;
+            *) open "$NIM_MODEL_URL" >/dev/null 2>&1 || true ;;
+        esac
+    fi
+    printf '%s' "Paste NVIDIA NIM API key: " >&2
+    read -r -s key
+    printf '\n' >&2
     key="${key//$'\r'/}"
     key="${key//$'\n'/}"
-
     if [[ -z "$key" ]]; then
-        echo "pulsarcode: No key entered." >&2
+        printf '%s\n' "pulsarcode: no key entered." >&2
         return 2
     fi
-
-    if [[ ! "$key" =~ ^nvapi- ]]; then
-        echo "pulsarcode: Warning - key does not start with 'nvapi-'" >&2
-        read -rp "  Store anyway? [y/N] " confirm
-        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-            return 2
-        fi
+    if [[ "$key" != nvapi-* ]]; then
+        printf '%s' "This does not look like an nvapi- key. Store it anyway? [y/N] " >&2
+        read -r confirm
+        case "$confirm" in
+            y|Y|yes|YES) ;;
+            *) printf '%s\n' "pulsarcode: key not stored." >&2; return 2 ;;
+        esac
     fi
-
     mkdir -p "$PULSAR_HOME"
     chmod 700 "$PULSAR_HOME" 2>/dev/null || true
+    umask 077
     printf '%s\n' "$key" > "$NIM_KEY_FILE"
     chmod 600 "$NIM_KEY_FILE" 2>/dev/null || true
     export NVIDIA_NIM_API_KEY="$key"
-
-    echo "" >&2
-    echo "  Key stored. Testing connection..." >&2
-
-    # Quick test
-    if curl -s -o /dev/null -w "%{http_code}" \
-        -H "Authorization: Bearer $key" \
-        -H "Content-Type: application/json" \
-        -d '{"model":"moonshotai/kimi-k2.6","messages":[{"role":"user","content":"hi"}],"max_tokens":1}' \
-        "https://integrate.api.nvidia.com/v1/chat/completions" 2>/dev/null | grep -q '^2'; then
-        echo "  Connection OK! Key is valid." >&2
-    else
-        echo "  Warning: Could not verify key. It may still work." >&2
-    fi
-
-    return 0
+    export NVIDIA_NIM_KEY="${NVIDIA_NIM_KEY:-$key}"
+    export NVIDIA_API_KEY="${NVIDIA_API_KEY:-$key}"
+    printf '%s\n' "pulsarcode: key stored. Future launches use NVIDIA NIM automatically." >&2
+    printf '%s\n' "pulsarcode: next prompt will validate the key through the local adapter." >&2
 }
 
-# --- Status Check ---
-show_status() {
-    echo "pulsarcode status"
-    echo "================="
-    echo ""
-    echo "Configuration:"
-    echo "  Home directory: $PULSAR_HOME"
-    echo "  Key file:       $NIM_KEY_FILE"
-    echo "  Default model:  $NIM_MODEL_ID"
-    echo "  API base:       $NIM_API_BASE"
-    echo ""
-
-    if load_nim_key; then
-        echo "  NVIDIA NIM key: Present"
-    else
-        echo "  NVIDIA NIM key: NOT FOUND"
-        echo "  Run: pulsarcode /api"
+load_nim_key() {
+    local key=""
+    install_api_slash_command
+    if [[ -n "${NVIDIA_NIM_API_KEY:-}" ]]; then
+        export NVIDIA_NIM_KEY="${NVIDIA_NIM_KEY:-$NVIDIA_NIM_API_KEY}"
+        export NVIDIA_API_KEY="${NVIDIA_API_KEY:-$NVIDIA_NIM_API_KEY}"
+        return 0
     fi
-    echo ""
-
-    echo "Claude Code:"
-    if [[ -n "$CLAUDE_BIN" ]]; then
-        echo "  Binary: $CLAUDE_BIN"
-    else
-        echo "  Binary: NOT FOUND"
-        echo "  Install from: https://claude.com/claude-code"
+    if [[ -n "${NVIDIA_NIM_KEY:-}" ]]; then
+        export NVIDIA_NIM_API_KEY="$NVIDIA_NIM_KEY"
+        export NVIDIA_API_KEY="${NVIDIA_API_KEY:-$NVIDIA_NIM_KEY}"
+        return 0
     fi
-    echo ""
-
-    echo "Quick commands:"
-    echo "  pulsarcode        - Launch interactive mode"
-    echo "  pulsarcode /api   - Configure API key"
-    echo "  pulsarcode sonar  - List available models"
-    echo "  pulsarcode help   - Show full help"
+    if [[ -n "${NVIDIA_API_KEY:-}" ]]; then
+        export NVIDIA_NIM_API_KEY="$NVIDIA_API_KEY"
+        export NVIDIA_NIM_KEY="${NVIDIA_NIM_KEY:-$NVIDIA_API_KEY}"
+        return 0
+    fi
+    if [[ -f "$NIM_KEY_FILE" ]]; then
+        key="$(tr -d '\r\n' < "$NIM_KEY_FILE")"
+        if [[ -n "$key" ]]; then
+            export NVIDIA_NIM_API_KEY="$key"
+            export NVIDIA_NIM_KEY="${NVIDIA_NIM_KEY:-$key}"
+            export NVIDIA_API_KEY="${NVIDIA_API_KEY:-$key}"
+            return 0
+        fi
+    fi
+    store_nim_key_interactive "missing NVIDIA NIM key"
 }
 
-# --- Sonar (Model List) ---
-show_sonar() {
-    if ! load_nim_key; then
-        echo "pulsarcode: No NVIDIA NIM key found." >&2
-        echo "  Run: pulsarcode /api" >&2
-        return 1
-    fi
-
-    echo "Available NVIDIA NIM Models (via API Sonar):"
-    echo ""
-
-    # Static list for team distribution (avoids API call)
-    cat <<'MODELS'
-  nim-kimi                          Kimi K2.6 (default, 256K context)
-  nim-kimi-k2-thinking              Kimi K2 Thinking
-  nim-kimi-k2-instruct              Kimi K2 Instruct
-  nim-qwen-qwen3-coder-480b       Qwen 3 Coder 480B
-  nim-qwen-qwq-32b                QwQ 32B
-  nim-meta-llama-3-1-70b          Llama 3.1 70B
-  nim-deepseek-deepseek-v4-flash  DeepSeek V4 Flash
-  nim-mistral-magistral-small     Mistral Magistral Small
-
-  Use with: pulsarcode --model <alias>
-MODELS
+ensure_phsl_up() {
+    if phsl_alive; then return 0; fi
+    echo "pulsarcode: PHSL down, starting it ..." >&2
+    bash "${PROJECT_DIR}/scripts/start_pulsar_stack.sh" >/dev/null 2>&1 || true
+    for i in $(seq 1 60); do sleep 2; if phsl_alive; then return 0; fi; done
+    echo "pulsarcode: PHSL did not come up at ${PHSL_BASE}." >&2
+    return 2
 }
 
-# --- Help ---
-show_help() {
-    cat <<'HELP'
-pulsarcode - Sovereign Claude Code for Teams
+ensure_fast_up() {
+    if fast_alive; then return 0; fi
+    echo "pulsarcode: mlx-lm Qwen backend down, starting it ..." >&2
+    bash "${PROJECT_DIR}/scripts/start_fast_backend.sh" >/dev/null 2>&1 || true
+    for i in $(seq 1 60); do sleep 2; if fast_alive; then return 0; fi; done
+    echo "pulsarcode: mlx-lm Qwen backend did not come up at ${FAST_BASE}." >&2
+    return 2
+}
 
-USAGE:
-  pulsarcode [OPTIONS] [PROMPT]
+ensure_litellm_up() {
+    local litellm_pid=""
+    local log_target="$LITELLM_LOG_FILE"
+    if litellm_alive; then return 0; fi
+    if [[ ! -x "$PULSAR_VENV/bin/python" ]]; then
+        echo "pulsarcode: venv python not found at $PULSAR_VENV/bin/python." >&2
+        return 2
+    fi
+    if [[ "$log_target" != "/dev/null" ]]; then
+        if ! mkdir -p "$(dirname "$log_target")" 2>/dev/null || ! : >> "$log_target" 2>/dev/null; then
+            echo "pulsarcode: warning: could not write LiteLLM log file at $log_target; using /dev/null." >&2
+            log_target="/dev/null"
+        fi
+    fi
+    echo "pulsarcode: NIM adapter down, starting it for NVIDIA NIM Kimi K2.6 ..." >&2
+    PYTHONPATH="$PROJECT_DIR" \
+        nohup "$PULSAR_VENV/bin/python" "$PROJECT_DIR/proxy/nim_anthropic_proxy.py" \
+            --host "$LITELLM_HOST" --port "$LITELLM_PORT" \
+            --model "$NIM_MODEL_ID" --public-model "$NIM_PUBLIC_MODEL" \
+            --api-base "$NIM_API_BASE" \
+        > "$log_target" 2>&1 &
+    litellm_pid=$!
+    if mkdir -p "$(dirname "$LITELLM_PID_FILE")" 2>/dev/null; then
+        if ! printf '%s\n' "$litellm_pid" > "$LITELLM_PID_FILE" 2>/dev/null; then
+            echo "pulsarcode: warning: could not write NIM adapter pid file at $LITELLM_PID_FILE; continuing." >&2
+        fi
+    else
+        echo "pulsarcode: warning: could not create NIM adapter pid directory for $LITELLM_PID_FILE; continuing." >&2
+    fi
+    for i in $(seq 1 60); do
+        sleep 1
+        if litellm_alive; then return 0; fi
+    done
+    echo "pulsarcode: NIM adapter did not come up at ${LITELLM_BASE}." >&2
+    if [[ "$log_target" != "/dev/null" ]]; then
+        echo "pulsarcode: check $log_target" >&2
+    else
+        echo "pulsarcode: set PULSAR_NIM_PROXY_LOG_FILE to capture startup logs if disk space allows." >&2
+    fi
+    return 2
+}
 
-OPTIONS:
-  -p, --print "prompt"    Single prompt mode
-  --model <alias>         Use specific model (see 'pulsarcode sonar')
-  /api                    Configure NVIDIA NIM API key
-  sonar                   List available models
-  status                  Show configuration status
-  help                    Show this help
+print_help() {
+    cat <<HELP
+Local Pulsar  -  Claude Code UX, sovereign, your choice of model
 
-ENVIRONMENT:
-  NVIDIA_NIM_API_KEY      Your NVIDIA NIM API key
-  PULSAR_HOME             Config directory (default: ~/.pulsarcode)
-  PULSAR_NIM_MODEL        Default model (default: moonshotai/kimi-k2.6)
+Doctrine: the platform's advantage is the files, skills, memory, and living
+files around you. The model is commodity GPU. Per-developer NVIDIA NIM keys
+mean every teammate gets their own 1000-credit bucket. Switch models freely;
+memory, skills, and codebase context survive every swap.
 
-EXAMPLES:
-  pulsarcode                    # Interactive mode
-  pulsarcode -p "review code"   # Single prompt
-  pulsarcode --model nim-qwen-qwen3-coder-480b  # Use specific model
+Default:
 
-SETUP:
-  1. Install Claude Code: https://claude.com/claude-code
-  2. Run: pulsarcode /api
-  3. Follow the NVIDIA NIM setup wizard
-  4. Start coding: pulsarcode
+  pulsarcode   Same UX as Claude Code, ANTHROPIC_BASE_URL points to the
+               local NIM adapter at 127.0.0.1:4000. Routes to whichever
+               NIM alias you picked via 'pulsarcode pick' (default is
+               nim-kimi, Kimi K2.6). First launch runs the setup wizard.
 
-SUPPORT:
-  Email: yassine@pulsaros.ca
-  Docs:  See README.md in this distribution
+Setup / selection subcommands:
 
-Copyright (C) 2026 PulsarOS Intelligence Inc. / Collapse Technologies Inc.
-AGPL-3.0-or-later
+  /api       Cinematic NVIDIA NIM API key setup panel. Use once on first
+             launch, or any time you want to replace the stored key.
+
+  sonar      Print the full NVIDIA NIM model catalog (table form).
+             Sources: official NVIDIA docs, build catalog pages, optional
+             public source URLs from PULSAR_NIM_SONAR_SOURCES, and the
+             authorized /v1/models endpoint when your key exposes it.
+
+  pick       Arrow-key interactive picker over the Sonar catalog. Run in
+             a fresh terminal tab (cannot be used inside a Claude Code
+             session because Claude Code captures stdin). Writes the
+             choice to ~/.pulsarcode/active_model. Next launch inherits.
+
+  model              Print the current active model alias.
+  model <alias>      Set the active model alias for the next launch.
+                     Validated against the live Sonar catalog.
+
+Local sovereign modes (no NIM, your weights, your Mac):
+
+  kimi       Kimi K2.6 (1T MoE INT2 .col on YOUR Mac SSD).
+             Sovereign Collapse Technologies asset, your IP.
+             Layer-major chunked prefill (Patent 154 DirectStream embodiment,
+             draft in STATE.md). Big prompts no longer OOM. Speed reality:
+             still slow on 8 GB Mac (~3-5 min/token cold cache). Will
+             produce tokens, not 500.
+
+  gemma      Gemma 4 31B INT2 .col (5.92 GB, 9.84x certified, your IP).
+             Run 'pulsarcode gemma --build' ONCE to convert .col to MLX
+             safetensors (10-30 min wall). After that, 'pulsarcode gemma'
+             is the daily-driver sovereign path on your Mac. No HuggingFace
+             pull involved. Text-only inference (vision_tower skipped).
+
+  qwen       Qwen 2.5 Coder 7B 4-bit MLX (PURGED 2026-05-05 by APPROVED
+             DELETE qwen-cache). Subcommand retained as a tombstone.
+
+Observability:
+
+  status     stack health, Mac SSD model inventory, current backend,
+             active model alias, NIM key presence.
+
+  help       this help.
+
+Routing guarantees:
+  pulsarcode never modifies your system claude binary or your ~/.claude/
+  profile. Runs from ~/.pulsarcode/claude_config (isolated). Local modes
+  make zero outbound non-local model calls when explicitly selected. No
+  HuggingFace pulls without standalone operator approval (RL-1).
+
 HELP
 }
 
-# --- Main ---
-main() {
-    # Handle subcommands
-    case "${1:-}" in
-        /api|--api|api)
-            setup_nim_key_interactive
-            exit $?
-            ;;
-        status)
-            show_status
-            exit 0
-            ;;
-        sonar)
-            show_sonar
-            exit 0
-            ;;
-        help|-h|--help)
-            show_help
-            exit 0
-            ;;
-    esac
-
-    # Check for Claude Code
-    if [[ -z "$CLAUDE_BIN" ]]; then
-        echo "pulsarcode: Claude Code not found." >&2
-        echo "  Install from: https://claude.com/claude-code" >&2
-        exit 127
-    fi
-
-    # Load or prompt for NIM key
-    if ! load_nim_key; then
-        echo "pulsarcode: NVIDIA NIM API key not found." >&2
-        echo "" >&2
-        setup_nim_key_interactive || {
-            echo "pulsarcode: Setup incomplete. Run 'pulsarcode /api' when ready." >&2
-            exit 1
-        }
-    fi
-
-    # Start the local adapter
-    ADAPTER_PORT="${PULSAR_NIM_ADAPTER_PORT:-4000}"
-    ADAPTER_HOST="${PULSAR_NIM_ADAPTER_HOST:-127.0.0.1}"
-
-    # Check if adapter is already running
-    if ! curl -s -o /dev/null -m 2 "http://${ADAPTER_HOST}:${ADAPTER_PORT}/healthz" 2>/dev/null; then
-        echo "pulsarcode: Starting local NVIDIA NIM adapter..." >&2
-
-        # Find the adapter script
-        ADAPTER_SCRIPT=""
-        for path in "$PULSAR_HOME/adapter/nim_anthropic_proxy.py" "./proxy/nim_anthropic_proxy.py"; do
-            if [[ -f "$path" ]]; then
-                ADAPTER_SCRIPT="$path"
-                break
-            fi
-        done
-
-        if [[ -z "$ADAPTER_SCRIPT" ]]; then
-            echo "pulsarcode: Warning - adapter script not found. Trying direct connection." >&2
-            export ANTHROPIC_BASE_URL="https://integrate.api.nvidia.com/v1"
-        else
-            # Start adapter in background
-            nohup python3 "$ADAPTER_SCRIPT" \
-                --host "$ADAPTER_HOST" \
-                --port "$ADAPTER_PORT" \
-                >/dev/null 2>&1 &
-
-            # Wait for it to come up
-            for i in {1..30}; do
-                if curl -s -o /dev/null -m 1 "http://${ADAPTER_HOST}:${ADAPTER_PORT}/healthz" 2>/dev/null; then
-                    break
-                fi
-                sleep 0.5
-            done
-        fi
-    fi
-
-    # Set up Claude Code environment
-    export ANTHROPIC_BASE_URL="http://${ADAPTER_HOST}:${ADAPTER_PORT}"
-    export ANTHROPIC_AUTH_TOKEN="local-pulsar-dev"
-    export ANTHROPIC_MODEL="${PULSAR_NIM_PUBLIC_MODEL:-nim-kimi}"
-    unset ANTHROPIC_API_KEY
-
-    # Launch Claude Code
-    exec "$CLAUDE_BIN" "$@"
+print_banner() {
+    local mode="$1"; local model="$2"; local backend="$3"; local note="$4"
+    local outbound="${5:-ZERO non-local network calls (sovereign local mode)}"
+    cat <<BANNER >&2
+========================================================================
+ Local Pulsar  -  Sovereign Claude Code  (mode: $mode)
+========================================================================
+ backend         : $backend
+ model           : $model
+ config dir      : $PULSAR_HOME/claude_config (isolated)
+ outbound        : $outbound
+ retry/timeout   : ANTHROPIC_MAX_RETRIES=0, ANTHROPIC_TIMEOUT=3600
+ $note
+========================================================================
+BANNER
 }
 
-main "$@"
+maybe_run_first_launch_wizard() {
+    # FIXED BY Claude 2026-05-20 (Rung 1): per-operator first-launch wizard.
+    # Idempotent. Runs ONCE per machine; subsequent launches skip entirely.
+    # The wizard chains: welcome banner -> NIM key paste -> Sonar picker ->
+    # mark onboarding_complete sentinel -> hand off to the standard launch.
+    if [[ -f "$ONBOARDING_SENTINEL" ]]; then
+        return 0
+    fi
+    if [[ ! -t 0 ]] || [[ ! -t 2 ]]; then
+        # Non-interactive shell: do not surprise CI or piped runs with a wizard.
+        return 0
+    fi
+    if [[ ! -x "$PULSAR_VENV/bin/python" ]]; then
+        echo "Local Pulsar: venv python missing at $PULSAR_VENV/bin/python. Skipping wizard." >&2
+        return 0
+    fi
+    cat <<'WELCOME' >&2
+
++----------------------------------------------------------------------------+
+| Welcome to Local Pulsar                                                    |
+| Claude Code, sovereign Canadian, routed to your choice of model            |
++----------------------------------------------------------------------------+
+
+ First-launch setup, three steps:
+   1. Generate an NVIDIA NIM API key (free, 1000 credits, no card required).
+   2. Pick a model from the API Sonar catalog using the arrow keys.
+   3. Launch Claude Code, ready to code.
+
+ The platform's advantage is the files, skills, memory, and living files
+ around you, not the model underneath. You can switch model anytime later
+ with `/model <alias>` inside a session or `pulsarcode pick` in a terminal.
+
+WELCOME
+
+    install_api_slash_command
+
+    echo "" >&2
+    echo " Step 1 of 3: NVIDIA NIM API key" >&2
+    echo " ----------------------------------" >&2
+    if ! store_nim_key_interactive "first launch wizard"; then
+        cat <<'KEY_SKIP' >&2
+
+ Key setup did not complete. Run `pulsarcode /api` whenever you are ready.
+ The default route stays at the doctrine default until then.
+
+KEY_SKIP
+        return 0
+    fi
+
+    echo "" >&2
+    echo " Step 2 of 3: pick a model from API Sonar" >&2
+    echo " -----------------------------------------" >&2
+    echo " Arrow keys to move, Enter to select, Esc to keep the default." >&2
+    echo "" >&2
+
+    key="$(current_nim_key 2>/dev/null || true)"
+    if [[ -n "$key" ]]; then
+        export NVIDIA_NIM_API_KEY="$key"
+        export NVIDIA_API_KEY="${NVIDIA_API_KEY:-$key}"
+    fi
+    PYTHONPATH="$PROJECT_DIR" "$PULSAR_VENV/bin/python" -m proxy.nim_sonar_picker \
+        --api-base "$NIM_API_BASE" \
+        --public-model "$NIM_PUBLIC_MODEL" || true
+
+    touch "$ONBOARDING_SENTINEL" 2>/dev/null || true
+    chmod 600 "$ONBOARDING_SENTINEL" 2>/dev/null || true
+
+    cat <<'DONE' >&2
+
+ Step 3 of 3: launching Claude Code
+
+DONE
+    return 0
+}
+
+# Default path if operator typed `pulsarcode` with no args, only flags
+# (`-p ...`, `--version`, etc.), or a normal Claude Code prompt argument:
+# NVIDIA NIM Kimi K2.6. Explicit local subcommand always wins.
+# FIXED BY Claude 2026-05-20 (Rung 1+2): added pick / select / model / sonar-pick.
+KNOWN_SUBS="kimi gemma qwen nim nvidia status sonar help api /api --api key pick select sonar-pick model"
+ARG1="${1:-}"
+if [[ -z "$ARG1" ]] || [[ "$ARG1" == -* ]] || [[ ! " $KNOWN_SUBS " == *" $ARG1 "* ]]; then
+    SUB="nim"
+    # Do NOT shift; the remaining args (e.g. --version, -p "...") are
+    # forwarded to the underlying claude binary by the trailing exec.
+    AUTO_MODE=1
+else
+    SUB="$ARG1"
+    AUTO_MODE=0
+fi
+
+# FIXED BY Claude 2026-05-20 (Rung 1): first-launch wizard.
+# Runs only on actual launches (nim / nvidia / no-subcommand). Never on
+# administrative subcommands (help / status / sonar / api / pick / model)
+# because those have their own UX and the wizard would be noise.
+case "$SUB" in
+    nim|nvidia)
+        maybe_run_first_launch_wizard
+        ;;
+esac
+
+case "$SUB" in
+    help|-h|--help)
+        print_help
+        exit 0
+        ;;
+
+    status)
+        install_api_slash_command
+        apply_active_model
+        echo "Local Pulsar stack status"
+        echo "  Default command: pulsarcode -> NVIDIA NIM (${NIM_PUBLIC_MODEL})"
+        if [[ -f "$ACTIVE_MODEL_FILE" ]]; then
+            echo "  Active model    : $(read_active_alias)  ->  ${NIM_MODEL_ID}"
+            echo "  Source          : ~/.pulsarcode/active_model (operator picked)"
+        else
+            echo "  Active model    : ${NIM_PUBLIC_MODEL}  ->  ${NIM_MODEL_ID}"
+            echo "  Source          : doctrine default (no operator selection yet)"
+        fi
+        if [[ -f "$ONBOARDING_SENTINEL" ]]; then
+            echo "  Onboarding      : completed"
+        else
+            echo "  Onboarding      : not yet completed (wizard runs on next 'pulsarcode')"
+        fi
+        echo "  PHSL    @ ${PHSL_BASE}/healthz       $(phsl_alive && echo OK || echo DOWN)"
+        echo "  mlx-lm  @ ${FAST_BASE}/v1/models    $(fast_alive && echo OK || echo DOWN)"
+        echo "  NIM adapter @ ${LITELLM_BASE}/v1/models $(litellm_alive && echo OK || echo DOWN)"
+        echo
+        echo "Your sovereign assets on Mac:"
+        nshards=$(find "$KIMI_ROOT" -maxdepth 1 -type f -name '*.col' 2>/dev/null | wc -l | tr -d ' ') || nshards=0
+        echo "  Kimi K2.6 INT2 .col      : ${nshards} shards (chunked prefill ACTIVE)"
+        GEMMA_COL="/Users/mehdibelkhouja/PulsarOS/03_COLLAPSE_TECHNOLOGIES - Collapse Technologies Inc. (100%)/col/registry/models/gemma4-31b-FULL-neutron-int2.col"
+        if [[ -f "$GEMMA_COL" ]]; then
+            sz=$(stat -f%z "$GEMMA_COL")
+            echo "  Gemma 4 31B INT2 .col    : present ($((sz / 1024 / 1024)) MB, 9.84x certified)"
+        fi
+        GEMMA_OUT="${PULSAR_GEMMA_DIR:-/Volumes/PulsarOS/gemma4-31b-pulsar-mlx-int2}"
+        if [[ -f "$GEMMA_OUT/model.safetensors" ]]; then
+            sz=$(du -sh "$GEMMA_OUT" 2>/dev/null | cut -f1)
+            echo "  Gemma 4 31B MLX (built)  : present ($sz)  -> 'pulsarcode gemma'"
+        else
+            echo "  Gemma 4 31B MLX (built)  : NOT YET BUILT  -> 'pulsarcode gemma --build'"
+        fi
+        echo
+        if [[ -n "${NVIDIA_NIM_API_KEY:-}${NVIDIA_NIM_KEY:-}${NVIDIA_API_KEY:-}" || -f "$NIM_KEY_FILE" ]]; then
+            echo "Default remote backend:"
+            echo "  NVIDIA NIM Kimi K2.6    : key source present -> 'pulsarcode'"
+        else
+            echo "Default remote backend:"
+            echo "  NVIDIA NIM Kimi K2.6    : key not found -> run 'pulsarcode /api'"
+        fi
+        echo "  API setup panel         : pulsarcode /api"
+        echo
+        echo "Removed (per operator DELETE approval):"
+        echo "  Qwen 2.5 Coder 7B 4bit   : PURGED 2026-05-05 (~4 GB freed)"
+        exit 0
+        ;;
+
+    api|/api|--api|key)
+        install_api_slash_command
+        matrix_intro api
+        store_nim_key_interactive "manual /api request"
+        exit $?
+        ;;
+
+    sonar)
+        install_api_slash_command
+        key="$(current_nim_key 2>/dev/null || true)"
+        if [[ -n "$key" ]]; then
+            export NVIDIA_NIM_API_KEY="$key"
+            export NVIDIA_API_KEY="${NVIDIA_API_KEY:-$key}"
+        fi
+        PYTHONPATH="$PROJECT_DIR" "$PULSAR_VENV/bin/python" -m proxy.nim_api_sonar \
+            --api-base "$NIM_API_BASE" \
+            --public-model "$NIM_PUBLIC_MODEL"
+        exit $?
+        ;;
+
+    pick|select|sonar-pick)
+        # FIXED BY Claude 2026-05-20 (Rung 1+2): arrow-key interactive picker.
+        install_api_slash_command
+        key="$(current_nim_key 2>/dev/null || true)"
+        if [[ -z "$key" ]]; then
+            echo "Local Pulsar: no NVIDIA NIM key found. Run 'pulsarcode /api' first." >&2
+            exit 2
+        fi
+        export NVIDIA_NIM_API_KEY="$key"
+        export NVIDIA_API_KEY="${NVIDIA_API_KEY:-$key}"
+        matrix_intro pick
+        PYTHONPATH="$PROJECT_DIR" "$PULSAR_VENV/bin/python" -m proxy.nim_sonar_picker \
+            --api-base "$NIM_API_BASE" \
+            --public-model "$NIM_PUBLIC_MODEL"
+        rc=$?
+        if [[ $rc -eq 0 ]]; then
+            current="$(read_active_alias 2>/dev/null || true)"
+            if [[ -n "$current" ]]; then
+                echo "Local Pulsar: next 'pulsarcode' will route to ${current}." >&2
+            fi
+        fi
+        exit $rc
+        ;;
+
+    model)
+        # FIXED BY Claude 2026-05-20 (Rung 2): switch active model alias.
+        # Usage: pulsarcode model              -> print current
+        #        pulsarcode model <alias>      -> set, validate against catalog
+        install_api_slash_command
+        if [[ -z "${2:-}" ]]; then
+            current="$(read_active_alias 2>/dev/null || true)"
+            if [[ -n "$current" ]]; then
+                echo "Local Pulsar: active model is ${current}."
+                echo "Run 'pulsarcode sonar' to see the catalog or 'pulsarcode pick' for the picker."
+            else
+                echo "Local Pulsar: no active model selected yet."
+                echo "Run 'pulsarcode pick' to choose, or 'pulsarcode model <alias>' to set directly."
+            fi
+            exit 0
+        fi
+        target="$2"
+        key="$(current_nim_key 2>/dev/null || true)"
+        if [[ -n "$key" ]]; then
+            export NVIDIA_NIM_API_KEY="$key"
+            export NVIDIA_API_KEY="${NVIDIA_API_KEY:-$key}"
+        fi
+        upstream="$(resolve_alias_to_upstream "$target" 2>/dev/null || true)"
+        if [[ -z "$upstream" || "$upstream" == "None" ]]; then
+            echo "Local Pulsar: alias '${target}' not recognized in the current Sonar catalog." >&2
+            echo "  Run 'pulsarcode sonar' to see valid aliases, or 'pulsarcode pick' for the picker." >&2
+            exit 64
+        fi
+        # Persist via the picker module to keep one canonical write path.
+        if ! PYTHONPATH="$PROJECT_DIR" "$PULSAR_VENV/bin/python" - "$target" <<'PY'
+import sys
+from proxy.nim_sonar_picker import write_active_model
+write_active_model(sys.argv[1])
+PY
+        then
+            echo "Local Pulsar: failed to persist active model." >&2
+            exit 1
+        fi
+        echo "Local Pulsar: active model set to ${target} (${upstream})."
+        echo "Next 'pulsarcode' launch in this shell will route there automatically."
+        exit 0
+        ;;
+
+    nim|nvidia)
+        load_nim_key
+        # FIXED BY Claude 2026-05-20 (Rung 1+2): apply persisted operator choice.
+        # If ~/.pulsarcode/active_model holds an alias, override NIM_MODEL_ID
+        # to the resolved upstream. Otherwise keep the doctrine default.
+        apply_active_model
+        ensure_litellm_up
+        if [[ "${PULSAR_NIM_SONAR:-1}" != "0" ]] && ! litellm_has_sonar_catalog; then
+            echo "pulsarcode: existing adapter does not expose the API Sonar catalog; finding a selector-compatible local port." >&2
+            if switch_to_existing_sonar_port; then
+                :
+            elif switch_to_fresh_nim_port; then
+                ensure_litellm_up
+            else
+                echo "pulsarcode: no free local NIM adapter port found between 4001 and 4010." >&2
+                exit 2
+            fi
+        fi
+        if ! litellm_has_nim_model; then
+            {
+                printf '%s\n' "pulsarcode: NIM adapter is reachable at ${LITELLM_BASE}, but it does not advertise selector alias ${NIM_SELECTOR_DEFAULT_MODEL}."
+                printf '\n'
+                printf '%s\n' "The proxy may already be running with an older config. Start this mode on a fresh port without touching the live proxy:"
+                printf '%s\n' "  PULSAR_LITELLM_PORT=4001 pulsarcode"
+                printf '\n'
+                printf '%s\n' "Or reload the NIM adapter after reviewing the current process state."
+            } >&2
+            exit 2
+        fi
+        BACKEND_URL="$LITELLM_BASE"
+        ACTIVE_MODEL="$NIM_PUBLIC_MODEL"
+        matrix_intro "$@"
+        # FIXED BY Claude 2026-05-20 (Rung 1+2): banner reflects operator's picked alias.
+        ACTIVE_FROM="default"
+        if [[ -f "$ACTIVE_MODEL_FILE" ]]; then
+            ACTIVE_FROM="picked by operator (~/.pulsarcode/active_model)"
+        fi
+        print_banner "Local Pulsar via NVIDIA NIM" \
+            "${NIM_PUBLIC_MODEL}  ->  NVIDIA NIM (${NIM_MODEL_ID})" \
+            "NIM adapter @ ${LITELLM_BASE}" \
+            "Routing: ${ACTIVE_FROM}.
+ Switch model live with /model <alias> or 'pulsarcode pick' in a fresh terminal.
+ Local Kimi and Gemma modes remain unchanged behind explicit subcommands." \
+            "NVIDIA NIM model calls only"
+        ;;
+
+    kimi)
+        ensure_phsl_up
+        BACKEND_URL="$PHSL_BASE"
+        # FIXED BY Claude 2026-05-07: must match the LiteLLM model_name alias in
+        # proxy/litellm_config.yaml line 39 (`pulsar-kimi`). The upstream
+        # `openai/kimi-k2_6` is the litellm_params.model that the proxy forwards
+        # to PHSL, NOT the public alias Claude Code presents.
+        ACTIVE_MODEL="pulsar-kimi"
+        print_banner "kimi (sovereign, with layer-major chunked prefill)" \
+            "Kimi K2.6 (1T MoE INT2 .col, your asset)" \
+            "PHSL @ ${PHSL_BASE}" \
+            "Big prompts (~6k tokens) no longer OOM as of 2026-05-05.
+ Layer-major chunked prefill (patent-novel) splits the prompt into 256-token
+ chunks and inverts the loop so each layer is loaded ONCE per prefill,
+ regardless of prompt length.  Score matrix capped at ~400 MB (was 9.5 GB).
+ First-token cost: still ~3 to 5 min on cold cache (1T MoE on 8 GB Mac).
+ PHSL emits SSE keep-alive pings every ~25 sec.  Be patient."
+        ;;
+
+    gemma)
+        GEMMA_OUT_DIR="${PULSAR_GEMMA_DIR:-/Volumes/PulsarOS/gemma4-31b-pulsar-mlx-int2}"
+        if [[ "${2:-}" == "--build" ]]; then
+            echo "pulsarcode gemma --build" >&2
+            echo "Running col_to_gemma4_mlx.py converter (one-time, 10-30 min)." >&2
+            echo "Source : YOUR gemma4-31b-FULL-neutron-int2.col (5.92 GB, intact)" >&2
+            echo "Output : $GEMMA_OUT_DIR" >&2
+            echo >&2
+            cd "$PROJECT_DIR"
+            PYTHONPATH="$PROJECT_DIR" "$HOME/.kimi-local-venv/bin/python" \
+                "$PROJECT_DIR/tools/col_to_gemma4_mlx.py" \
+                --output-dir "$GEMMA_OUT_DIR"
+            rc=$?
+            if [[ $rc -ne 0 ]]; then
+                echo "pulsarcode: gemma converter exited with code $rc" >&2
+                exit $rc
+            fi
+            echo >&2
+            echo "Gemma 4 31B converted. To start serving:" >&2
+            echo "  bash scripts/start_fast_backend.sh   # (after pointing it at $GEMMA_OUT_DIR)" >&2
+            echo "Then run: pulsarcode gemma" >&2
+            exit 0
+        fi
+
+        if [[ ! -d "$GEMMA_OUT_DIR" ]] || [[ ! -f "$GEMMA_OUT_DIR/model.safetensors" ]]; then
+            cat <<GEMMA_NEED_BUILD >&2
+========================================================================
+ pulsarcode gemma  -  Gemma 4 31B INT2 .col (operator's sovereign asset)
+========================================================================
+ Source asset : /Users/.../col/registry/models/gemma4-31b-FULL-neutron-int2.col
+                (5.92 GB INT2, 9.84x certified, your IP)
+
+ Status       : converter SHIPPED, not yet RUN.
+
+ To run the one-time conversion (10-30 min wall):
+   pulsarcode gemma --build
+
+ The converter reads YOUR .col, skips the 355 vision_tower tensors,
+ keeps the 832 language_model tensors, renames model.language_model.X
+ to model.X (mlx-lm naming), packs Q2 weights for MLX QuantizedLinear,
+ copies tokenizer + chat template from your supergemma4-26b folder,
+ and writes to ${GEMMA_OUT_DIR}.
+
+ After conversion, mlx-lm gemma4_text serves directly. PHSL forwards
+ from port 8000 to mlx-lm at 8001 with model alias 'pulsar-gemma'.
+========================================================================
+GEMMA_NEED_BUILD
+            exit 0
+        fi
+
+        # Converted Gemma is on disk. Start mlx-lm pointed at it, route via PHSL.
+        export PULSAR_FAST_MODEL="$GEMMA_OUT_DIR"
+        ensure_phsl_up
+        ensure_fast_up
+        BACKEND_URL="$PHSL_BASE"
+        ACTIVE_MODEL="pulsar-gemma"
+        print_banner "gemma (sovereign)" \
+            "Gemma 4 31B INT2 (your .col, converted to MLX safetensors)" \
+            "PHSL @ ${PHSL_BASE} -> mlx-lm @ ${FAST_BASE}" \
+            "Daily-driver path.  Converted from your sovereign gemma4-31b-FULL
+ -neutron-int2.col asset (5.92 GB).  Text-only inference (vision_tower
+ skipped).  No HuggingFace pull involved."
+        ;;
+
+    qwen)
+        cat <<QWEN_GONE >&2
+pulsarcode qwen: cache PURGED on 2026-05-05 by APPROVED DELETE qwen-cache.
+                 4 GB freed at ~/.cache/huggingface/hub/models--mlx-community--
+                 Qwen2.5-Coder-7B-Instruct-4bit (gone).
+                 The Qwen path is no longer available.
+
+For a working backend, use:
+  pulsarcode kimi              YOUR sovereign Kimi K2.6 (chunked prefill)
+  pulsarcode gemma --build     ONE-TIME convert YOUR Gemma 4 31B .col
+  pulsarcode gemma             daily-driver after build (sovereign)
+QWEN_GONE
+        exit 0
+        ;;
+
+    *)
+        echo "pulsarcode: unknown subcommand '$SUB'." >&2
+        echo "            run 'pulsarcode help' for available modes." >&2
+        exit 64
+        ;;
+esac
+
+# Common Claude Code env (reached for kimi, gemma, nim modes)
+export CLAUDE_CONFIG_DIR="$PULSAR_HOME/claude_config"
+export ANTHROPIC_BASE_URL="$BACKEND_URL"
+export ANTHROPIC_AUTH_TOKEN="${PULSAR_AUTH_TOKEN:-local-pulsar-dev}"
+unset ANTHROPIC_API_KEY
+export ANTHROPIC_MODEL="$ACTIVE_MODEL"
+if [[ "$SUB" == "nim" || "$SUB" == "nvidia" ]]; then
+    export ANTHROPIC_DEFAULT_SONNET_MODEL="$NIM_SELECTOR_THINKING_MODEL"
+    export ANTHROPIC_DEFAULT_SONNET_MODEL_NAME="Pulsar Kimi Thinking"
+    export ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION="NVIDIA NIM Kimi K2 thinking route through API Sonar"
+    export ANTHROPIC_DEFAULT_OPUS_MODEL="$NIM_SELECTOR_DEFAULT_MODEL"
+    export ANTHROPIC_DEFAULT_OPUS_MODEL_NAME="Pulsar Kimi K2.6"
+    export ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION="NVIDIA NIM Kimi K2.6, official 256K context, default pulsarcode route"
+    export ANTHROPIC_DEFAULT_HAIKU_MODEL="$NIM_SELECTOR_CODER_MODEL"
+    export ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME="Pulsar Qwen Coder"
+    export ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION="NVIDIA NIM Qwen coder route through API Sonar"
+    export ANTHROPIC_CUSTOM_MODEL_OPTION="$NIM_SELECTOR_INSTRUCT_MODEL"
+    export ANTHROPIC_CUSTOM_MODEL_OPTION_NAME="Pulsar Kimi Instruct"
+    export ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION="NVIDIA NIM Kimi K2 instruct route through API Sonar"
+    export ANTHROPIC_CUSTOM_MODEL_OPTION_SUPPORTED_CAPABILITIES="tools,streaming"
+    export ANTHROPIC_SMALL_FAST_MODEL="$NIM_SELECTOR_CODER_MODEL"
+    export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1
+else
+    export ANTHROPIC_DEFAULT_SONNET_MODEL="$ACTIVE_MODEL"
+    export ANTHROPIC_DEFAULT_OPUS_MODEL="$ACTIVE_MODEL"
+    export ANTHROPIC_DEFAULT_HAIKU_MODEL="$ACTIVE_MODEL"
+    export ANTHROPIC_SMALL_FAST_MODEL="$ACTIVE_MODEL"
+fi
+
+export ANTHROPIC_MAX_RETRIES=0
+export ANTHROPIC_TIMEOUT=3600
+export ANTHROPIC_REQUEST_TIMEOUT=3600
+
+export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+export DISABLE_TELEMETRY=1
+export DISABLE_AUTOUPDATER=1
+export DISABLE_ERROR_REPORTING=1
+export DISABLE_BUG_COMMAND=1
+export DISABLE_NON_ESSENTIAL_MODEL_CALLS=1
+export DISABLE_COST_WARNINGS=1
+export CLAUDE_CODE_USE_BEDROCK=0
+export CLAUDE_CODE_USE_VERTEX=0
+
+# Only shift away the first arg if it was actually a subcommand we consumed.
+# In AUTO_MODE, $1 is the first claude flag (e.g. --version, -p) and must
+# stay in the argv we forward.
+if [[ "$AUTO_MODE" -eq 0 ]]; then
+    shift
+fi
+if [[ "$SUB" == "nim" || "$SUB" == "nvidia" ]]; then
+    if [[ "${PULSAR_NIM_MODEL_SETTINGS:-1}" != "0" ]] && ! args_have_settings "$@"; then
+        nim_model_settings_file="$(write_nim_model_settings 2>/dev/null || true)"
+        if [[ -n "$nim_model_settings_file" ]]; then
+            set -- --settings "$nim_model_settings_file" "$@"
+        fi
+    fi
+fi
+exec "${CLAUDE_BIN}" "$@"
