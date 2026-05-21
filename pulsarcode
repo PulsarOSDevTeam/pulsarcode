@@ -344,61 +344,105 @@ Managed by pulsarcode.
 MODEL_CMD
 }
 
-maybe_run_first_launch_wizard() {
-    if [[ -f "$ONBOARDING_SENTINEL" ]]; then return 0; fi
+run_launch_wizard() {
+    # v1.0.3: every-launch wizard. Step 1 is a one-keystroke y/N to keep or
+    # replace the stored NIM key. Step 2 is the arrow-key picker with a
+    # RECENTLY USED tier at the top so re-picking your usual model is one
+    # arrow keystroke. Esc anywhere keeps current selection and launches.
+    # First-launch only: welcome banner gated on the onboarding sentinel.
+    # All failures are non-fatal so a single bad step never strands a launch.
+    # Skip the wizard entirely by exporting PULSAR_SKIP_WIZARD=1.
+    if [[ "${PULSAR_SKIP_WIZARD:-0}" == "1" ]]; then return 0; fi
     if [[ ! -t 0 ]] || [[ ! -t 2 ]]; then return 0; fi
     if [[ ! -x "$PULSAR_VENV/bin/python" ]]; then
         echo "pulsarcode: venv python missing at $PULSAR_VENV/bin/python. Skipping wizard." >&2
         return 0
     fi
-    cat <<'WELCOME' >&2
+
+    install_slash_commands
+
+    if [[ ! -f "$ONBOARDING_SENTINEL" ]]; then
+        cat <<'WELCOME' >&2
 
 +----------------------------------------------------------------------------+
 | Welcome to pulsarcode                                                      |
 | Sovereign Claude Code launcher, your choice of model                       |
 +----------------------------------------------------------------------------+
 
- First-launch setup, three numbered steps:
-
-   1. Generate an NVIDIA NIM API key (free, 1000 credits, no card required).
-   2. Pick a model from the live API Sonar catalog using the arrow keys.
-   3. Launch Claude Code with your chosen model, ready to code.
+ Every launch walks through two quick steps:
+   1. API key check  (replace if you want, default is keep)
+   2. Model picker   (your recently-used models appear first;
+                      Esc keeps current and launches)
 
  You can switch model anytime later:
    /model <alias>    inside a session  (persists for next launch)
    pulsarcode pick   in a fresh terminal  (arrow-key picker)
 
 WELCOME
-    install_slash_commands
+    fi
+
     echo "" >&2
-    echo " Step 1 of 3: NVIDIA NIM API key" >&2
+    echo " Step 1 of 2: NVIDIA NIM API key" >&2
     echo " --------------------------------" >&2
-    if ! store_nim_key_interactive "first launch wizard"; then
-        cat <<'KEY_SKIP' >&2
+    local existing_key=""
+    existing_key="$(current_nim_key 2>/dev/null || true)"
+    if [[ -z "$existing_key" ]]; then
+        # No key stored: mandatory paste so the picker can fetch a live catalog.
+        if ! store_nim_key_interactive "key required (none stored yet)"; then
+            cat <<'KEY_SKIP' >&2
 
  Key setup did not complete. Run `pulsarcode /api` whenever you are ready.
+ The launch will continue with whatever model is already selected.
 
 KEY_SKIP
-        return 0
+        fi
+    else
+        # Key already stored: ask before replacing, default N.
+        local masked=""
+        masked="$(mask_key_source "$existing_key")"
+        printf ' Stored key : %s\n' "$masked" >&2
+        printf ' Replace stored NIM API key now? [y/N] ' >&2
+        local confirm=""
+        read -r confirm
+        case "$confirm" in
+            y|Y|yes|YES)
+                store_nim_key_interactive "user chose to replace" || true
+                ;;
+            *)
+                printf ' Keeping stored key.\n' >&2
+                ;;
+        esac
     fi
+
     echo "" >&2
-    echo " Step 2 of 3: pick a model from API Sonar" >&2
-    echo " -----------------------------------------" >&2
-    echo " Arrow keys to move, Enter to select, Esc to keep the default." >&2
+    echo " Step 2 of 2: pick a model" >&2
+    echo " --------------------------" >&2
+    echo " Arrows up / down to move, Enter to select, Esc to keep current." >&2
+    echo " Your recently-used models appear at the top." >&2
     echo "" >&2
-    local key
-    key="$(current_nim_key 2>/dev/null || true)"
-    if [[ -n "$key" ]]; then export NVIDIA_NIM_API_KEY="$key"; fi
+
+    local picker_key=""
+    picker_key="$(current_nim_key 2>/dev/null || true)"
+    if [[ -n "$picker_key" ]]; then
+        export NVIDIA_NIM_API_KEY="$picker_key"
+    fi
+    # Picker TUI lives on stderr; stdout (the chosen alias print) is
+    # discarded so it does not pollute the launch output. The picker
+    # writes the chosen alias to ~/.pulsarcode/active_model and prepends
+    # it to ~/.pulsarcode/model_history. Catalog network failures already
+    # fall back to a static catalog inside nim_api_sonar.runtime_catalog,
+    # so we invoke the picker once. Any uncaught failure is non-fatal.
     PYTHONPATH="$PROJECT_DIR" "$PULSAR_VENV/bin/python" -m proxy.nim_sonar_picker \
         --api-base "$NIM_API_BASE" \
-        --public-model "$NIM_PUBLIC_MODEL" || true
+        --public-model "$NIM_PUBLIC_MODEL" >/dev/null || true
+
     touch "$ONBOARDING_SENTINEL" 2>/dev/null || true
     chmod 600 "$ONBOARDING_SENTINEL" 2>/dev/null || true
-    cat <<'DONE' >&2
 
- Step 3 of 3: launching Claude Code
-
-DONE
+    echo "" >&2
+    echo " Launching Claude Code ..." >&2
+    echo "" >&2
+    return 0
 }
 
 print_help() {
@@ -460,7 +504,7 @@ fi
 
 case "$SUB" in
     launch)
-        maybe_run_first_launch_wizard
+        run_launch_wizard
         ;;
 esac
 
@@ -551,10 +595,14 @@ case "$SUB" in
             echo "  Run 'pulsarcode sonar' to see valid aliases." >&2
             exit 64
         fi
+        # v1.0.3: also prepend the alias to ~/.pulsarcode/model_history so
+        # direct /model selections promote into the RECENTLY USED tier on
+        # the next launch picker.
         if ! PYTHONPATH="$PROJECT_DIR" "$PULSAR_VENV/bin/python" - "$target" <<'PY'
 import sys
-from proxy.nim_sonar_picker import write_active_model
+from proxy.nim_sonar_picker import write_active_model, write_history
 write_active_model(sys.argv[1])
+write_history(sys.argv[1])
 PY
         then
             echo "pulsarcode: failed to persist active model." >&2

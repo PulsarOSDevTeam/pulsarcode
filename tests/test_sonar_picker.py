@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (C) 2026 PulsarOS Intelligence Inc.
+# Copyright (C) 2026 PulsarOS Intelligence Inc. / Collapse Technologies Inc.
 """Unit tests for proxy.nim_sonar_picker.
 
 Covers tier classification, group ordering, persistence round-trip, and
@@ -16,22 +16,27 @@ import pytest
 
 from proxy.nim_api_sonar import NIMModelRecord, static_catalog
 from proxy.nim_sonar_picker import (
+    HISTORY_CAP,
     TIER_CODING,
     TIER_GENERAL,
     TIER_LIGHTWEIGHT,
     TIER_LOCAL_PULSAR,
     TIER_ORDER,
     TIER_OTHER,
+    TIER_RECENT,
     Row,
     active_model_path,
     build_rows,
     find_alias,
     first_selectable,
     group_by_tier,
+    history_path,
     read_active_model,
+    read_history,
     render,
     tier_of,
     write_active_model,
+    write_history,
 )
 
 
@@ -130,10 +135,10 @@ def test_render_emits_header_for_each_nonempty_tier():
     groups = group_by_tier(records)
     rows = build_rows(groups)
     lines = render(rows, cursor=-1, current_alias=None)
-    # The render must not emit em-dash characters; the project's house style
-    # forbids them in any user-facing string. We express the codepoint via
-    # a unicode escape so the source file itself does not contain the literal
-    # character, which would trip the CI em-dash audit on this test file.
+    # The render must not emit em-dash characters. The check character is
+    # encoded as a unicode escape so this test file itself contains no
+    # literal em-dash byte (which would trip the CI em-dash audit on this
+    # very file).
     EM_DASH = "\u2014"
     for line in lines:
         assert EM_DASH not in line, "em dash leaked into render output"
@@ -149,3 +154,97 @@ def test_active_model_round_trip(tmp_path: Path):
     # mode should be tightened
     mode = oct(active_model_path(home).stat().st_mode)[-3:]
     assert mode == "600"
+
+
+def test_history_round_trip(tmp_path: Path):
+    home = tmp_path / "pulsar_home"
+    home.mkdir()
+    assert read_history(home) == []
+    write_history("nim-kimi", home)
+    assert read_history(home) == ["nim-kimi"]
+    write_history("nim-qwen3-coder-480b-a35b-instruct", home)
+    assert read_history(home) == ["nim-qwen3-coder-480b-a35b-instruct", "nim-kimi"]
+    # Selecting an existing alias moves it to front, no duplication.
+    write_history("nim-kimi", home)
+    assert read_history(home) == ["nim-kimi", "nim-qwen3-coder-480b-a35b-instruct"]
+
+
+def test_history_file_mode_is_600(tmp_path: Path):
+    home = tmp_path / "pulsar_home"
+    home.mkdir()
+    write_history("nim-kimi", home)
+    mode = oct(history_path(home).stat().st_mode)[-3:]
+    assert mode == "600"
+
+
+def test_history_cap(tmp_path: Path):
+    home = tmp_path / "pulsar_home"
+    home.mkdir()
+    for i in range(HISTORY_CAP + 5):
+        write_history(f"nim-alias-{i}", home)
+    h = read_history(home)
+    assert len(h) == HISTORY_CAP
+    # Newest first.
+    assert h[0] == f"nim-alias-{HISTORY_CAP + 4}"
+    # Oldest in the cap window.
+    assert h[-1] == f"nim-alias-{5}"
+
+
+def test_history_silent_when_file_missing(tmp_path: Path):
+    home = tmp_path / "pulsar_home"
+    home.mkdir()
+    # No file written yet.
+    assert read_history(home) == []
+
+
+def test_group_by_tier_with_history_prepends_recent_in_order():
+    records = static_catalog()
+    coding = [r for r in records if tier_of(r) == TIER_CODING][:2]
+    assert len(coding) == 2, "static catalog must have at least 2 coding-tier records"
+    history = [r.alias for r in coding]
+    groups = group_by_tier(records, history=history)
+    assert [r.alias for r in groups[TIER_RECENT]] == history
+    coding_aliases_after = [r.alias for r in groups[TIER_CODING]]
+    for alias in history:
+        assert alias not in coding_aliases_after, (
+            f"alias {alias} duplicated in CODING after promotion to RECENT"
+        )
+
+
+def test_group_by_tier_ignores_history_aliases_not_in_catalog():
+    records = static_catalog()
+    real_alias = records[0].alias
+    history = [real_alias, "alias-that-does-not-exist-in-catalog"]
+    groups = group_by_tier(records, history=history)
+    assert len(groups[TIER_RECENT]) == 1
+    assert groups[TIER_RECENT][0].alias == real_alias
+
+
+def test_group_by_tier_no_history_leaves_recent_empty():
+    records = static_catalog()
+    groups = group_by_tier(records)
+    assert groups[TIER_RECENT] == []
+
+
+def test_build_rows_skips_recent_when_empty():
+    records = static_catalog()
+    groups = group_by_tier(records)  # no history -> RECENT empty
+    rows = build_rows(groups)
+    # No header row should mention RECENTLY USED.
+    for row in rows:
+        if row.kind == "header":
+            assert "RECENTLY" not in row.label, (
+                "RECENT header should not render when tier is empty"
+            )
+
+
+def test_build_rows_emits_recent_header_when_populated():
+    records = static_catalog()
+    coding = [r for r in records if tier_of(r) == TIER_CODING][:1]
+    history = [r.alias for r in coding]
+    groups = group_by_tier(records, history=history)
+    rows = build_rows(groups)
+    # First header row should be RECENTLY USED.
+    headers = [r.label for r in rows if r.kind == "header"]
+    assert headers, "expected at least one header row"
+    assert "RECENTLY USED" in headers[0]

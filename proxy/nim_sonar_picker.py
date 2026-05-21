@@ -1,27 +1,25 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (C) 2026 PulsarOS Intelligence Inc.
-"""Interactive arrow-key picker over the live NVIDIA NIM model catalog.
+# Copyright (C) 2026 PulsarOS Intelligence Inc. / Collapse Technologies Inc.
+"""Interactive arrow-key picker over the PulsarOS API Sonar catalog.
 
-The picker groups NIM models into operator-facing tiers (LOCAL, CODING,
-GENERAL, LIGHTWEIGHT, OTHER), renders a banner-style TUI matching the
-pulsarcode register, and persists the operator's selection to
-``~/.pulsarcode/active_model`` so subsequent launches inherit it.
+The picker groups NVIDIA NIM models into operator-facing tiers
+(LOCAL_PULSAR, CODING, GENERAL, LIGHTWEIGHT, OTHER), renders a banner-style
+TUI matching the pulsarcode design register, and persists the operator's
+selection to ~/.pulsarcode/active_model so subsequent launches inherit it.
 
-Invoked by:
-  - the first-launch wizard inside ``install.sh``-installed pulsarcode;
-  - the ``pulsarcode pick`` subcommand (run in a fresh terminal tab);
-  - the ``/model <alias>`` Claude Code custom slash command shipped with
-    pulsarcode (for persisted, sticky model selection across launches).
+This module is the Rung 1 core for the first-launch wizard. It is also
+invoked by the `pulsarcode pick` subcommand and by the `/model` Claude Code
+custom slash command (Rung 2) when the operator wants to switch live.
 
-Design notes:
-  - The operator is never exposed to backend model id syntax. Aliases only.
-  - Zero em dashes in any user-facing string. The render tests assert this.
-  - The catalog drives the choice; the picker never prompts the operator
+Doctrine:
+  - PulsarOS Pillar 14 (Omnipresent API Sonar) and Pillar 15 (NIM as
+    dumb-compute payload), with the operator never exposed to backend
+    model id syntax. Aliases only.
+  - CLAUDE.md RL-3: zero em dashes in any user-facing string.
+  - CLAUDE.md RL-11: zero internal terminology in user-facing strings.
+  - feedback_decide_dont_interview.md: decide, never prompt the operator
     with a question the catalog already answers.
-  - Letter-boundary regex matching prevents substring-overlap bugs in tier
-    classification (for example, the substring 'mini' must not match the
-    model name 'minimax-m2.7').
 """
 
 from __future__ import annotations
@@ -57,6 +55,7 @@ except ImportError:
 # Tier classification (derived from upstream model id; see derivation notes).
 # ---------------------------------------------------------------------------
 
+TIER_RECENT = "RECENT"
 TIER_LOCAL_PULSAR = "LOCAL_PULSAR"
 TIER_CODING = "CODING"
 TIER_GENERAL = "GENERAL"
@@ -64,6 +63,7 @@ TIER_LIGHTWEIGHT = "LIGHTWEIGHT"
 TIER_OTHER = "OTHER"
 
 TIER_ORDER: Tuple[str, ...] = (
+    TIER_RECENT,
     TIER_LOCAL_PULSAR,
     TIER_CODING,
     TIER_GENERAL,
@@ -72,10 +72,11 @@ TIER_ORDER: Tuple[str, ...] = (
 )
 
 TIER_HEADERS: Dict[str, str] = {
-    TIER_LOCAL_PULSAR: "LOCAL  airplane-mode routes hosted on your own machine",
-    TIER_CODING: "CODING  largest coding-tuned routes",
-    TIER_GENERAL: "GENERAL  mid to large general-purpose routes",
-    TIER_LIGHTWEIGHT: "LIGHTWEIGHT  small, fast, low-cost",
+    TIER_RECENT: "RECENTLY USED  your previous selections, newest first",
+    TIER_LOCAL_PULSAR: "LOCAL PULSAR  sovereign, airplane mode, your patents",
+    TIER_CODING: "CODING TIER  largest coding-tuned routes",
+    TIER_GENERAL: "GENERAL TIER  mid to large general-purpose routes",
+    TIER_LIGHTWEIGHT: "LIGHTWEIGHT TIER  small, fast, low-cost",
     TIER_OTHER: "OTHER  uncategorized public NIM routes",
 }
 
@@ -176,11 +177,38 @@ def _within_tier_sort_key(record: NIMModelRecord) -> Tuple[int, str]:
     return (1_000, model)
 
 
-def group_by_tier(records: Sequence[NIMModelRecord]) -> Dict[str, List[NIMModelRecord]]:
+def group_by_tier(
+    records: Sequence[NIMModelRecord],
+    history: Optional[Sequence[str]] = None,
+) -> Dict[str, List[NIMModelRecord]]:
+    """Group records into operator-facing tiers.
+
+    If `history` is given (newest first), every record whose alias appears in
+    history is placed in the RECENT tier in history order, and removed from
+    its content-classified tier. Records whose alias is not in history land
+    in their content-classified tier as before. RECENT preserves history
+    order (no sort); other tiers sort by `_within_tier_sort_key`.
+    """
     groups: Dict[str, List[NIMModelRecord]] = {tier: [] for tier in TIER_ORDER}
+    by_alias: Dict[str, NIMModelRecord] = {r.alias: r for r in records}
+    placed_aliases: set = set()
+
+    if history:
+        for alias in history:
+            record = by_alias.get(alias)
+            if record is not None and alias not in placed_aliases:
+                groups[TIER_RECENT].append(record)
+                placed_aliases.add(alias)
+
     for record in records:
+        if record.alias in placed_aliases:
+            continue
         groups[tier_of(record)].append(record)
+        placed_aliases.add(record.alias)
+
     for tier, items in groups.items():
+        if tier == TIER_RECENT:
+            continue  # preserve history order
         items.sort(key=_within_tier_sort_key)
     return groups
 
@@ -215,6 +243,73 @@ def write_active_model(alias: str, pulsar_home: Path = DEFAULT_PULSAR_HOME) -> N
         pass
     path = active_model_path(pulsar_home)
     path.write_text(alias.strip() + "\n", encoding="utf-8")
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
+# Picker history. Most recent first. Capped to keep the RECENT tier scannable.
+HISTORY_FILENAME = "model_history"
+HISTORY_CAP = 20
+
+
+def history_path(pulsar_home: Path = DEFAULT_PULSAR_HOME) -> Path:
+    return pulsar_home / HISTORY_FILENAME
+
+
+def read_history(pulsar_home: Path = DEFAULT_PULSAR_HOME) -> List[str]:
+    """Return the picker history (newest first), deduplicated, capped.
+
+    Robust to a missing or malformed file: returns [] on any read error so the
+    picker never fails to render because of history corruption.
+    """
+    path = history_path(pulsar_home)
+    if not path.exists():
+        return []
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    aliases: List[str] = []
+    seen: set = set()
+    for line in text.splitlines():
+        alias = line.strip()
+        if not alias or alias in seen:
+            continue
+        seen.add(alias)
+        aliases.append(alias)
+        if len(aliases) >= HISTORY_CAP:
+            break
+    return aliases
+
+
+def write_history(alias: str, pulsar_home: Path = DEFAULT_PULSAR_HOME) -> None:
+    """Prepend `alias` to the history, dedupe earlier occurrences, cap.
+
+    No-op on empty alias. Robust to filesystem errors: best-effort write,
+    silent on permission or disk errors so the caller's launch path is
+    never blocked by a history-file failure.
+    """
+    alias = alias.strip()
+    if not alias:
+        return
+    try:
+        pulsar_home.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return
+    try:
+        os.chmod(pulsar_home, 0o700)
+    except OSError:
+        pass
+    existing = read_history(pulsar_home)
+    deduped = [a for a in existing if a != alias]
+    new_history = ([alias] + deduped)[:HISTORY_CAP]
+    path = history_path(pulsar_home)
+    try:
+        path.write_text("\n".join(new_history) + "\n", encoding="utf-8")
+    except OSError:
+        return
     try:
         os.chmod(path, 0o600)
     except OSError:
@@ -482,14 +577,12 @@ def _pick_numbered_fallback(
     """Numbered-list fallback for platforms without raw TTY (Windows, etc.).
 
     Same persistence semantics as pick_model: on selection, writes the alias
-    to ~/.pulsarcode/active_model and returns it.
+    to ~/.pulsarcode/active_model AND prepends to ~/.pulsarcode/model_history.
+    Walks rows in their input order so tier headers (including RECENTLY USED)
+    appear above the models they classify, matching the arrow-key view.
     """
     write = lambda text: out.write(text + "\n")  # noqa: E731
-    model_rows: List[Tuple[int, Row]] = [
-        (number, row) for number, row in enumerate(
-            (r for r in rows if r.kind == "model"), start=1
-        )
-    ]
+
     # Re-render with numbers and tier headers, but skip the cursor highlight.
     write("")
     write(_paint(_ascii_top(), _EMBER))
@@ -500,22 +593,24 @@ def _pick_numbered_fallback(
     write("")
     write(_paint("  Type the number of the model you want, then Enter. Empty input keeps current.", _DIM))
     write("")
-    current_tier: Optional[str] = None
-    for number, row in model_rows:
-        if row.record is None:
-            continue
-        tier = tier_of(row.record)
-        if tier != current_tier:
-            current_tier = tier
+    model_rows: List[Tuple[int, Row]] = []
+    next_number = 1
+    for row in rows:
+        if row.kind == "header":
             write("")
-            write("  " + _paint(TIER_HEADERS[tier], _BOLD))
-            write("  " + _paint("-" * min(len(TIER_HEADERS[tier]), 70), _DIM))
+            write("  " + _paint(row.label, _BOLD))
+            write("  " + _paint("-" * min(len(row.label), 70), _DIM))
+            continue
+        if row.kind != "model" or row.record is None:
+            continue
         marker = "[x]" if row.record.alias == current_alias else "[ ]"
         meta = _describe(row.record)
-        line = f"  {number:3d}.  {marker}  {row.record.alias:36}  {row.record.upstream_id:50}  {meta}"
+        line = f"  {next_number:3d}.  {marker}  {row.record.alias:36}  {row.record.upstream_id:50}  {meta}"
         if row.record.alias == current_alias:
             line = _paint(line, _GREEN)
         write(line)
+        model_rows.append((next_number, row))
+        next_number += 1
     write("")
     write(_paint(_ascii_top(), _EMBER))
     write("")
@@ -538,6 +633,7 @@ def _pick_numbered_fallback(
     if record is None:
         return None
     write_active_model(record.alias)
+    write_history(record.alias)
     write("")
     write(_paint(f"  Local Pulsar: active model set to {record.alias}.", _GREEN))
     return record.alias
@@ -560,7 +656,8 @@ def pick_model(
         write("Local Pulsar: empty NIM catalog. Run `pulsarcode /api` to set your key.")
         return None
 
-    groups = group_by_tier(records)
+    history = read_history()
+    groups = group_by_tier(records, history=history)
     rows = build_rows(groups)
     if not any(row.kind == "model" for row in rows):
         write("Local Pulsar: no model rows in catalog after grouping.")
@@ -647,6 +744,7 @@ def pick_model(
                     if record is None:
                         continue
                     write_active_model(record.alias)
+                    write_history(record.alias)
                     return record.alias
                 if key in {"ESC", "q", "CTRL-C"}:
                     return None
