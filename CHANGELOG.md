@@ -8,6 +8,59 @@ public releases.
 
 ---
 
+## v1.0.5  -  Copy polish across every user-facing surface
+
+Documentation-only release. No code behavior change. Brings every
+user-visible string in the project up to v1.0.4 reality and clears the
+last of the v1.0.0 anchors that survived through patch releases.
+
+### What changed
+
+- **README**: the "what you see when you run it" demo now matches the
+  every-launch wizard (two-step `y/N` and `pick a model` flow) with a
+  populated `RECENTLY USED` tier on top. The hardcoded version badge
+  was replaced with a dynamic GitHub-rendered "latest release" badge.
+  Hardcoded `pulsarcode-v1.0.0.zip` references in the quick start were
+  replaced with a one-line `curl` install snippet against the latest
+  release. The "12-test smoke suite" is now "21-test". The features
+  list documents the `RECENTLY USED` tier and the `model_history` file.
+  Troubleshooting entry "macOS first-launch wizard does not appear" is
+  obsolete (the wizard now runs every launch) and was replaced with a
+  `PULSAR_SKIP_WIZARD=1` recipe.
+- **install.sh**: banner is `pulsarcode installer` (the previous header
+  carried internal branding from the developer's local tree). The
+  "Next step" block describes the every-launch two-step flow with the
+  `PULSAR_SKIP_WIZARD=1` escape hatch. The smoke-test step now reports
+  the actual pass count parsed from pytest output instead of hardcoding
+  `12/12`.
+- **Launcher** (`pulsarcode`): top-of-file comment and `pulsarcode help`
+  describe the every-launch wizard with explicit `PULSAR_SKIP_WIZARD=1`
+  documentation. The `pick` subcommand's help mentions
+  `~/.pulsarcode/model_history` and the `RECENTLY USED` tier.
+- **Picker module docstring**: rewritten for an external code reader.
+  References to internal doctrine numbering and design memos were
+  removed; the file now documents what the picker does and how to
+  invoke it.
+- **`LOCAL_PULSAR` tier header text**: neutralized so it does not read
+  as operator-specific framing. The tier itself is reserved for future
+  on-device routes and is silently hidden on the public surface today.
+
+### Tests
+
+Suite still 21/21 on the CI matrix. No behavior changes; the existing
+tests cover every code path touched by this release.
+
+### Upgrade
+
+```bash
+bash install.sh
+```
+
+Idempotent. Your stored NIM key, current `active_model`, and
+`model_history` all carry over from v1.0.x.
+
+---
+
 ## v1.0.4  -  Picker first-keypress fix and anchored repaint
 
 Bug-fix release. Two issues in v1.0.3 caused a visibly broken picker:

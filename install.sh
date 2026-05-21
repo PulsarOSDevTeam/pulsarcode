@@ -2,16 +2,20 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 PulsarOS Intelligence Inc.
 #
-# Local Pulsar / pulsarcode  -  team distribution installer
+# pulsarcode  -  installer
 # =============================================================================
 #
-# This installer ships the SAME launcher that the maintainer runs on his own
-# Mac. There is no parallel codebase. The installation layout:
+# Installs pulsarcode under ~/.pulsarcode/ with an isolated Python venv and
+# a symlink at ~/.local/bin/pulsarcode. Idempotent: re-run any time to
+# refresh the canonical files; never touches your stored key, current model
+# selection, model history, or Claude Code profile.
+#
+# Layout produced by this installer:
 #
 #   ~/.pulsarcode/
 #     canonical/
-#       pulsarcode         <- the launcher you invoke (canonical, not stripped)
-#       proxy/             <- the Sonar catalog + NIM adapter + picker module
+#       pulsarcode             the launcher you invoke
+#       proxy/                 API Sonar + NIM adapter + arrow-key picker
 #         __init__.py
 #         nim_anthropic_proxy.py
 #         nim_api_sonar.py
@@ -19,21 +23,18 @@
 #       tests/
 #         test_sonar_picker.py
 #       requirements.txt
-#     venv/                <- isolated Python virtual env, owned by this install
-#     nim.key              <- your NVIDIA NIM key (chmod 600, never leaves this Mac)
-#     active_model         <- last alias selected via /model or pulsarcode pick
-#     onboarding_complete  <- sentinel; first-launch wizard runs once
-#     claude_config/       <- isolated Claude Code profile (no leak to ~/.claude)
-#       commands/          <- /api /sonar /pick /model managed slash commands
+#     venv/                    isolated Python virtual env
+#     nim.key                  your NVIDIA NIM key (chmod 600)
+#     active_model             last alias selected
+#     model_history            recently-used aliases, newest first, cap 20
+#     onboarding_complete      sentinel; welcome banner shows on first launch only
+#     claude_config/           isolated Claude Code profile
+#       commands/              /api /sonar /pick /model managed slash commands
 #
 #   ~/.local/bin/pulsarcode  -> symlink into ~/.pulsarcode/canonical/pulsarcode
 #
-# After the install completes, the very first `pulsarcode` invocation walks
-# you through: NVIDIA NIM API key paste -> arrow-key Sonar picker -> launch.
-#
-# Re-run this installer any time to refresh the canonical files. It is
-# idempotent and never touches your stored key, active_model selection, or
-# Claude Code profile.
+# After this installer finishes, run `pulsarcode` in any project directory.
+# The every-launch wizard walks you through API key check and model pick.
 
 set -euo pipefail
 
@@ -59,12 +60,12 @@ print_banner() {
     cat <<BANNER
 
 ${EMBER}+---------------------------------------------------------------------------+${RESET}
-${EMBER}| Local Pulsar  /  pulsarcode  /  team distribution installer               |${RESET}
+${EMBER}| pulsarcode installer                                                      |${RESET}
 ${EMBER}+---------------------------------------------------------------------------+${RESET}
 
-  Sovereign Claude Code with NVIDIA NIM as commodity GPU.
-  Your moat: the files, the skills, the memory, the living files in your repo.
-  The model is interchangeable. Pick any Sonar route at first launch.
+  Sovereign Claude Code launcher with NVIDIA NIM as the model backend.
+  Bring your own free NVIDIA key. Pick any of 55+ frontier coding models.
+  AGPL-3.0, no telemetry, no phone-home.
 
 BANNER
 }
@@ -224,9 +225,15 @@ step_8_smoke_test() {
         return 0
     fi
     if PYTHONPATH=. "$VENV_DIR/bin/python" -m pytest tests/test_sonar_picker.py -q >/tmp/pulsarcode_install_smoke.log 2>&1; then
-        print_ok "12/12 tests passed (see /tmp/pulsarcode_install_smoke.log for detail)"
+        local passed
+        passed="$(grep -Eo '[0-9]+ passed' /tmp/pulsarcode_install_smoke.log | head -1)"
+        if [[ -n "$passed" ]]; then
+            print_ok "$passed (see /tmp/pulsarcode_install_smoke.log for detail)"
+        else
+            print_ok "all smoke tests passed (see /tmp/pulsarcode_install_smoke.log for detail)"
+        fi
     else
-        print_warn "smoke tests failed; install is usable but flag this to the maintainer"
+        print_warn "smoke tests failed; install is usable but please file a bug report"
         print_warn "log at /tmp/pulsarcode_install_smoke.log"
     fi
     cd - >/dev/null
@@ -237,29 +244,32 @@ step_9_print_next() {
 
 ${GREEN}install complete.${RESET}
 
-  Next step: open a new terminal tab and run:
+  Run pulsarcode from any project directory:
 
     ${BOLD}cd /path/to/your/project${RESET}
     ${BOLD}pulsarcode${RESET}
 
-  The first launch walks you through three steps:
+  Every launch walks through two quick steps:
 
-    1. Paste a free NVIDIA NIM API key
-       Generate it at https://build.nvidia.com (free, 1000 credits per key,
-       no card required). Each teammate brings their OWN key. Your bucket,
-       your throughput.
+    1. NVIDIA NIM API key
+       First time only, paste a free key from https://build.nvidia.com
+       (no card, 1000 credits per account). On subsequent launches you
+       get a one-keystroke ${BOLD}Replace stored NIM API key now? [y/N]${RESET}
+       (default keeps your key).
 
-    2. Arrow-key Sonar picker
-       55+ models grouped by tier (CODING, GENERAL, LIGHTWEIGHT, OTHER).
-       Pick one. Esc keeps the default (Kimi K2.6).
+    2. Model picker
+       Live catalog of 55+ frontier coding routes grouped into
+       RECENTLY USED, CODING, GENERAL, LIGHTWEIGHT, OTHER. Arrow
+       keys move, Enter selects, Esc keeps your current pick and
+       launches. Your previous selections appear on top.
 
-    3. Claude Code launches with your chosen model.
+  Switch model any time:
+    ${BOLD}/model <alias>${RESET}          inside a session (persists for next launch)
+    ${BOLD}Claude Code's /model${RESET}    inside a session (live, this session only)
+    ${BOLD}pulsarcode pick${RESET}         fresh terminal tab (arrow-key picker)
+    ${BOLD}pulsarcode /api${RESET}         re-paste your NIM key any time
 
-  Switch model later:
-    /model <alias>          inside a session (persists for next launch)
-    Claude Code's /model    inside a session (live, this session only)
-    pulsarcode pick         fresh terminal tab (arrow-key picker)
-    pulsarcode /api         re-paste your NIM key any time
+  Want a fast relaunch with no prompts? ${BOLD}PULSAR_SKIP_WIZARD=1 pulsarcode${RESET}.
 
   The launcher never modifies your system claude binary or your ~/.claude
   profile. Everything is isolated to $PULSAR_HOME.

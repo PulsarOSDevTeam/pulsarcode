@@ -9,10 +9,12 @@
 # API Sonar catalog (55+ frontier coding models). Get Claude Code's exact
 # UX with the model layer swapped to whichever NIM route you chose.
 #
-# Three numbered steps on first launch:
-#   1. NVIDIA NIM API key paste (free, 1000 credits, no card).
-#   2. Arrow-key model picker (or numbered fallback on Windows).
-#   3. Claude Code opens with your model wired in.
+# Every launch walks through two quick steps:
+#   1. API key check (one-keystroke y/N to keep or replace stored key;
+#      mandatory paste on the very first launch when nothing is stored).
+#   2. Arrow-key model picker with RECENTLY USED on top (numbered fallback
+#      on platforms without raw TTY). Esc keeps current and launches.
+# Export PULSAR_SKIP_WIZARD=1 for a fast relaunch with no prompts.
 #
 # Four managed slash commands installed into an isolated Claude Code
 # profile so they cannot leak into your personal claude config:
@@ -457,19 +459,22 @@ Default:
 
   pulsarcode      Same UX as Claude Code, ANTHROPIC_BASE_URL points to a
                   local NIM adapter at 127.0.0.1:4000. Routes to whichever
-                  NIM alias you picked via 'pulsarcode pick'. First launch
-                  runs the setup wizard.
+                  NIM alias you picked. Every launch runs the two-step
+                  wizard (API key check + model picker); export
+                  PULSAR_SKIP_WIZARD=1 to skip it for fast relaunches.
 
 Setup / selection subcommands:
 
-  /api            NVIDIA NIM API key setup panel. Use once on first launch,
-                  or any time you want to replace the stored key.
+  /api            NVIDIA NIM API key setup panel. Use any time you want
+                  to replace the stored key.
 
   sonar           Print the full live NVIDIA NIM model catalog (table form).
 
   pick            Arrow-key interactive picker over the Sonar catalog.
                   Run in a fresh terminal tab. Writes the choice to
-                  ~/.pulsarcode/active_model. Next launch inherits.
+                  ~/.pulsarcode/active_model and prepends to
+                  ~/.pulsarcode/model_history (mode 0600, capped at 20).
+                  RECENTLY USED tier on top so re-picks are one keystroke.
 
   model              Print the current active model alias.
   model <alias>      Set the active model alias for the next launch.

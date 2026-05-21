@@ -9,7 +9,7 @@ other frontier coding models inside the official Claude Code CLI, with no
 subscription and no credit card.
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-orange.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/PulsarOSDevTeam/pulsarcode/releases)
+[![Latest release](https://img.shields.io/github/v/release/PulsarOSDevTeam/pulsarcode?label=latest&color=blue)](https://github.com/PulsarOSDevTeam/pulsarcode/releases)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](#requirements)
 [![tests](https://github.com/PulsarOSDevTeam/pulsarcode/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/PulsarOSDevTeam/pulsarcode/actions/workflows/test.yml)
 [![Source available](https://img.shields.io/badge/source-available-blue.svg)](CONTRIBUTING.md)
@@ -30,53 +30,63 @@ $ pulsarcode
 | Sovereign Claude Code launcher, your choice of model                       |
 +----------------------------------------------------------------------------+
 
- Step 1 of 3: NVIDIA NIM API key (free, 1000 credits, no card required)
- Step 2 of 3: pick a model from API Sonar
- Step 3 of 3: launching Claude Code
+ Every launch walks through two quick steps:
+   1. API key check  (replace if you want, default is keep)
+   2. Model picker   (your recently-used models appear first;
+                      Esc keeps current and launches)
+
+ Step 1 of 2: NVIDIA NIM API key
+ Stored key : nvapi-Lm9Yk...c4uB
+ Replace stored NIM API key now? [y/N] _
+
+ Step 2 of 2: pick a model
+ Arrows up / down to move, Enter to select, Esc to keep current.
+ Your recently-used models appear at the top.
 
 +----------------------------------------------------------------------------+
 | pulsarcode  /  API Sonar  /  pick a model                                  |
 +----------------------------------------------------------------------------+
 
-  arrows up / down to move,  enter to select,  esc to keep current
+  RECENTLY USED  your previous selections, newest first
+  >  [x]  nim-kimi                      moonshotai/kimi-k2.6
+     [ ]  nim-deepseek-v4-pro           deepseek-ai/deepseek-v4-pro
+     [ ]  nim-qwen-qwen3-coder-480b     qwen/qwen3-coder-480b
 
   CODING TIER  largest coding-tuned routes
-  -----------------------------------------
-  >  [x]  nim-kimi                      moonshotai/kimi-k2.6        ctx=256K
-     [ ]  nim-kimi-k2-thinking          moonshotai/kimi-k2-thinking ctx=256K
-     [ ]  nim-qwen-qwen3-coder-480b     qwen/qwen3-coder-480b
-     [ ]  nim-deepseek-v4-flash         deepseek-ai/deepseek-v4-flash
+     [ ]  nim-kimi-k2-thinking          moonshotai/kimi-k2-thinking
+     [ ]  nim-kimi-k2-instruct          moonshotai/kimi-k2-instruct
      [ ]  nim-openai-gpt-oss-120b       openai/gpt-oss-120b
 
   GENERAL TIER  mid to large general-purpose routes
-  ---------------------------------------------------
      [ ]  nim-meta-llama-3-3-70b-instruct
      [ ]  nim-z-ai-glm5-1
      [ ]  nim-minimaxai-minimax-m2-7
-     ...
+     (8 more below)
 ```
 
-Pick one, hit enter, code.
+Hit Enter on what you want, code. The wizard runs on every launch; Esc on
+the picker keeps your current model and goes straight to Claude Code.
 
 ---
 
 ## Quick start (60 seconds)
 
-```bash
-# 1. Download the release zip from the latest release on GitHub.
-# 2. Unzip and install.
-unzip pulsarcode-v1.0.0.zip
-cd pulsarcode-1.0.0
-bash install.sh
+One command. Replace `vX.Y.Z` with the [latest release tag](https://github.com/PulsarOSDevTeam/pulsarcode/releases/latest) (the badge above shows it):
 
-# 3. Open a new terminal tab so $PATH refreshes, then in any project:
-cd ~/anything
-pulsarcode
+```bash
+curl -sL https://github.com/PulsarOSDevTeam/pulsarcode/releases/download/vX.Y.Z/pulsarcode-vX.Y.Z.zip \
+  -o /tmp/pulsarcode.zip && \
+unzip -oq /tmp/pulsarcode.zip -d /tmp && \
+bash /tmp/pulsarcode-X.Y.Z/install.sh && \
+~/.local/bin/pulsarcode
 ```
 
 That is it. The first launch walks you through generating a free NVIDIA NIM
 API key, picking a model with arrow keys, and handing off to the official
 Claude Code CLI with your chosen model wired in.
+
+Prefer manual install? Download the release zip from the Releases page,
+`bash install.sh`, then run `pulsarcode` from any project directory.
 
 **Requires** Claude Code installed from
 [claude.com/claude-code](https://claude.com/claude-code) (free download,
@@ -101,9 +111,8 @@ year is multiple months of average salary.
 Meanwhile NVIDIA hosts Kimi K2.6 (a 1-trillion-parameter mixture-of-
 experts model with 256K context), plus Qwen 3 Coder 480B, DeepSeek V4,
 Llama 3.3 70B, GPT-OSS 120B, and 50+ more, through their
-`build.nvidia.com` developer platform. The free tier as of v1.0.0
-release is 1000 credits per NVIDIA account, no credit card required, no
-auto-charge.
+`build.nvidia.com` developer platform. The free tier ships with 1000
+credits per NVIDIA account, no credit card required, no auto-charge.
 
 Claude Code natively supports redirecting model traffic to any backend
 that speaks the Anthropic Messages wire format, via the documented
@@ -124,11 +133,12 @@ dollars from this project.
 
 The launcher itself is free, forever, AGPL-3.0.
 
-NVIDIA's free NIM developer tier ships with 1000 credits per account
-as of this release. That covers roughly 10 to 50 prompts depending on
-prompt size and model. When you exhaust your credits, NVIDIA offers
-paid plans on the same `build.nvidia.com` platform; pulsarcode points
-you at the NVIDIA documentation when it sees a `429` from the API.
+NVIDIA's free NIM developer tier ships with 1000 credits per account.
+That covers roughly 10 to 50 prompts depending on prompt size and
+model. When you exhaust your credits, NVIDIA offers paid plans on the
+same `build.nvidia.com` platform; pulsarcode surfaces a clear message
+inside the Claude Code chat when it sees a `429` from the API and
+points you at the NVIDIA documentation.
 
 We earn zero dollars from this launcher. The repository is AGPL-3.0
 forever. There is no premium tier, no paid plan, no SaaS upsell, no
@@ -182,22 +192,39 @@ hook; it does not replace, modify, or redistribute it.
 
 ## Features in detail
 
-### First-launch wizard
+### Every-launch wizard
 
-Three numbered steps. The wizard prints a panel with the URL to open
-(`build.nvidia.com`), tells you what to click, where to paste the key it
-generates, and walks you straight into the model picker. No menus to hunt
-through, no docs to read.
+Two quick steps on every `pulsarcode` invocation. Step 1 is a one-keystroke
+`Replace stored NIM API key now? [y/N]` prompt (default keep) when a key
+is already stored, or a mandatory paste prompt the first time you run it.
+Step 2 is the model picker. Esc on the picker keeps your current model
+and launches immediately.
 
-### Arrow-key API Sonar picker
+Want the wizard out of the way for a fast relaunch? Export
+`PULSAR_SKIP_WIZARD=1` and pulsarcode goes straight to Claude Code with
+your stored key and current model.
 
-Hit `pulsarcode pick` in any fresh terminal tab. The picker fetches the
-**live** NVIDIA NIM catalog (55+ models, refreshed every 6 hours, plus
-whatever extra routes your specific account is authorized for), groups
-them into four tiers (CODING, GENERAL, LIGHTWEIGHT, OTHER), and lets
-you arrow-down through the list. Enter selects. Esc keeps the current.
-Choice persists to `~/.pulsarcode/active_model` so every future
-`pulsarcode` launch in any shell inherits it until you change again.
+### Arrow-key API Sonar picker with recently-used tier
+
+Hit `pulsarcode pick` in any fresh terminal tab, or let the every-launch
+wizard show it for you. The picker fetches the **live** NVIDIA NIM
+catalog (55+ models, refreshed every 6 hours, plus whatever extra routes
+your specific account is authorized for) and groups them into five
+sections:
+
+| Tier | Contents |
+|---|---|
+| `RECENTLY USED` | Your previous selections, newest first (only appears once you have history) |
+| `CODING TIER` | Kimi K2.6, Qwen 3 Coder 480B, DeepSeek V4, GPT-OSS 120B, and other coding-tuned routes |
+| `GENERAL TIER` | Llama 3.3 70B, GLM 5.1, Magistral, MiniMax, Mixtral, Nemotron |
+| `LIGHTWEIGHT TIER` | Phi-4 Mini, Gemma 2 2B, Llama 3.1 8B, smaller Nemotron variants |
+| `OTHER` | Uncategorized public NIM routes |
+
+Each model appears exactly once across the whole list. Arrow keys move,
+Enter selects, Esc keeps your current pick. Your choice persists to
+`~/.pulsarcode/active_model` and is appended to `~/.pulsarcode/model_history`
+(capped at 20 entries, mode 0600) so re-picking your usual model on the
+next launch is one arrow keystroke from the top.
 
 ### Four managed slash commands inside Claude Code
 
@@ -242,18 +269,19 @@ The only outbound network traffic the launcher generates is the
 bearer-authenticated HTTPS call to NVIDIA NIM with your prompt. You can
 verify with `tcpdump`, Little Snitch, or `lsof -i`.
 
-### 12-test smoke suite at install time
+### 21-test smoke suite at install time
 
 The installer's last step runs the unit tests inside the freshly built
-virtualenv. If anything fails, the install tells you. Twelve tests
-covering the tier classifier (letter-boundary regex to avoid the
+virtualenv. If anything fails, the install tells you. Twenty-one tests
+cover the tier classifier (letter-boundary regex to avoid the
 substring-overlap bug class), tier ordering, group rendering, active
-model round-trip, and an em-dash-leak assertion on the rendered picker
-output.
+model round-trip, the history-file round-trip (cap-at-20, dedupe,
+mode 0600, RECENTLY USED prepend order, stale-alias filtering), and an
+em-dash-leak assertion on the rendered picker output.
 
 ```
 [step 8] smoke test (picker tier classifier + active_model round-trip)
-  ok  12/12 tests passed
+  ok  21/21 tests passed
 ```
 
 ---
@@ -314,10 +342,10 @@ output.
 +--------------------------------------------+
 ```
 
-The local adapter is under 1000 lines of Python with zero non-stdlib
+The local adapter is about a thousand lines of Python with zero non-stdlib
 dependencies beyond `httpx`, `fastapi`, `uvicorn`, and `sse-starlette`.
-The full stack (launcher + 3 proxy modules + tests) is about 3000 lines.
-Readable in one sitting. Auditable in one afternoon.
+The full stack (launcher + 3 proxy modules + tests) is roughly 4000 to
+5000 lines. Readable in one sitting. Auditable in one afternoon.
 
 ---
 
@@ -406,28 +434,33 @@ The installer creates this layout under your home directory:
 
 ```
 ~/.pulsarcode/
-  canonical/         <- the launcher and proxy modules
-    pulsarcode       <- the bash launcher you invoke
-    proxy/           <- API Sonar + NIM adapter + arrow-key picker (Python)
-    tests/           <- the 12-test smoke suite
+  canonical/             the launcher and proxy modules
+    pulsarcode           the bash launcher you invoke
+    proxy/               API Sonar + NIM adapter + arrow-key picker (Python)
+    tests/               the 21-test smoke suite
     requirements.txt
-  venv/              <- isolated Python virtualenv (no system pip pollution)
-  nim.key            <- your NVIDIA NIM key (chmod 600, never leaves this Mac)
-  active_model       <- last alias selected via /model or pulsarcode pick
-  claude_config/     <- isolated Claude Code profile (no leak to ~/.claude)
-    commands/        <- the four managed slash commands
-  onboarding_complete  <- sentinel so the first-launch wizard runs exactly once
-  run/               <- adapter PIDs and logs (logs off by default)
+  venv/                  isolated Python virtualenv (no system pip pollution)
+  nim.key                your NVIDIA NIM key (chmod 600, never leaves this Mac)
+  active_model           last alias selected via /model or pulsarcode pick
+  model_history          your recently-used picks, newest first, capped at 20
+  claude_config/         isolated Claude Code profile (no leak to ~/.claude)
+    commands/            the four managed slash commands
+  onboarding_complete    sentinel; the welcome banner shows only on first launch
+  run/                   adapter PIDs and logs (logs off by default)
 
 ~/.local/bin/pulsarcode  -> symlink into ~/.pulsarcode/canonical/pulsarcode
 ```
 
 `install.sh` is **idempotent**. Re-run it any time to refresh the canonical
 files. It never touches your stored NIM key, your active model selection,
-or your Claude Code profile.
+your model history, or your Claude Code profile.
 
-Skip the PATH-export step with `PULSARCODE_SKIP_PATH_EXPORT=1` if you want
-to manage your shell rc by hand.
+Two environment flags worth knowing about:
+
+- `PULSARCODE_SKIP_PATH_EXPORT=1` skips appending `~/.local/bin` to your
+  shell rc during install (manage your shell rc by hand).
+- `PULSAR_SKIP_WIZARD=1` bypasses the every-launch wizard for a single
+  invocation; useful for scripted runs or fast relaunches.
 
 ---
 
@@ -496,15 +529,23 @@ You are probably running inside an environment where stdin is not a TTY
 (some CI runners, certain VS Code terminal panes). The picker falls back
 to numbered-list input: type a number, press enter.
 
-### macOS first-launch wizard does not appear
+### Wizard is too noisy, I want to relaunch fast
 
-The wizard runs once per machine via the `~/.pulsarcode/onboarding_complete`
-sentinel. Delete that file to make the wizard run again:
+Set `PULSAR_SKIP_WIZARD=1` for one-off fast launches:
 
 ```
-rm ~/.pulsarcode/onboarding_complete
-pulsarcode
+PULSAR_SKIP_WIZARD=1 pulsarcode
 ```
+
+Or export it from your shell rc to skip permanently. Your stored key and
+current model are used as-is; no prompts.
+
+### Welcome banner shows every launch
+
+It should only show on the very first launch after a fresh install. If it
+keeps showing, the onboarding sentinel was deleted or never created. Run
+`pulsarcode` once and let it complete; the sentinel will be created at
+`~/.pulsarcode/onboarding_complete` and the banner will not show again.
 
 ---
 
@@ -548,6 +589,6 @@ technology (which is separate from this repository):
 
 <div align="center">
 
-**pulsarcode v1.0.0**  ·  AGPL-3.0  ·  Made in Canada
+**pulsarcode**  ·  AGPL-3.0  ·  Made in Canada
 
 </div>

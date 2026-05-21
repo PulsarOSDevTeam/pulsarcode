@@ -1,25 +1,26 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (C) 2026 PulsarOS Intelligence Inc. / Collapse Technologies Inc.
-"""Interactive arrow-key picker over the PulsarOS API Sonar catalog.
+# Copyright (C) 2026 PulsarOS Intelligence Inc.
+"""Interactive arrow-key picker for the pulsarcode API Sonar catalog.
 
-The picker groups NVIDIA NIM models into operator-facing tiers
-(LOCAL_PULSAR, CODING, GENERAL, LIGHTWEIGHT, OTHER), renders a banner-style
-TUI matching the pulsarcode design register, and persists the operator's
-selection to ~/.pulsarcode/active_model so subsequent launches inherit it.
+Groups the live NVIDIA NIM model catalog into operator-facing tiers
+(RECENTLY USED, CODING, GENERAL, LIGHTWEIGHT, OTHER), renders a
+banner-style TUI on stderr, and persists the chosen alias to
+`~/.pulsarcode/active_model` and `~/.pulsarcode/model_history`
+(newline-delimited, mode 0600, capped at 20 entries, newest first).
 
-This module is the Rung 1 core for the first-launch wizard. It is also
-invoked by the `pulsarcode pick` subcommand and by the `/model` Claude Code
-custom slash command (Rung 2) when the operator wants to switch live.
+Invoked by:
+  - the every-launch pulsarcode wizard,
+  - the `pulsarcode pick` subcommand, and
+  - the `/model` custom slash command installed in the isolated Claude
+    Code config.
 
-Doctrine:
-  - PulsarOS Pillar 14 (Omnipresent API Sonar) and Pillar 15 (NIM as
-    dumb-compute payload), with the operator never exposed to backend
-    model id syntax. Aliases only.
-  - CLAUDE.md RL-3: zero em dashes in any user-facing string.
-  - CLAUDE.md RL-11: zero internal terminology in user-facing strings.
-  - feedback_decide_dont_interview.md: decide, never prompt the operator
-    with a question the catalog already answers.
+Design notes:
+  - No em dashes anywhere in user-visible strings (house style).
+  - Falls back to a numbered-list prompt on platforms without raw TTY
+    support (Windows native, certain CI runners, redirected stdin).
+  - Network failures on catalog fetch are silent: a static fallback
+    catalog ships with the module, so the picker always renders.
 """
 
 from __future__ import annotations
@@ -73,7 +74,7 @@ TIER_ORDER: Tuple[str, ...] = (
 
 TIER_HEADERS: Dict[str, str] = {
     TIER_RECENT: "RECENTLY USED  your previous selections, newest first",
-    TIER_LOCAL_PULSAR: "LOCAL PULSAR  sovereign, airplane mode, your patents",
+    TIER_LOCAL_PULSAR: "LOCAL  on-device routes (only appears when configured)",
     TIER_CODING: "CODING TIER  largest coding-tuned routes",
     TIER_GENERAL: "GENERAL TIER  mid to large general-purpose routes",
     TIER_LIGHTWEIGHT: "LIGHTWEIGHT TIER  small, fast, low-cost",
