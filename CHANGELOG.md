@@ -10,6 +10,18 @@ public releases.
 
 ## v1.0.8  -  Three demo-blocking fixes
 
+> **Documentation polish landed 2026-05-21** (no version bump, no code
+> change, tarball asset unchanged): the README Quick Start now opens
+> with a four-bullet "Prerequisites at a glance" block, the
+> Requirements table grew a dedicated Node.js row plus an inline note
+> on the Claude Code row explaining that the installer auto-pulls it
+> via npm if absent, and the curl one-liner in the Quick Start was
+> bound to the actual `v1.0.8` tag instead of `vX.Y.Z` placeholders.
+> The v1.0.8 release-page notes were updated in place via
+> `gh release edit` to mirror the same Requirements block. The tag,
+> the commit (`0d005ce`), and the downloaded `pulsarcode-v1.0.8.tar.gz`
+> bytes are identical to publish time.
+
 User-visible demo bugs caught while screen-recording the launch film
 against a real fresh-install on macOS:
 

@@ -71,12 +71,19 @@ the picker keeps your current model and goes straight to Claude Code.
 
 ## Quick start (60 seconds)
 
-One command. Replace `vX.Y.Z` with the [latest release tag](https://github.com/PulsarOSDevTeam/pulsarcode/releases/latest) (the badge above shows it):
+**Prerequisites at a glance** (the installer halts cleanly with a clear pointer if any are missing):
+
+- macOS 14+ or modern Linux (Ubuntu 22.04+ / Debian 13+ / Fedora 40+ / Alpine). Windows users need WSL2.
+- Python 3.11 or newer. `brew install python@3.14` on macOS, `apt-get install python3.12 python3.12-venv` on Debian / Ubuntu.
+- Either Claude Code already installed, **OR** Node.js with `npm` on your machine so the installer can auto-pull it via `npm i -g @anthropic-ai/claude-code`. If you do not have Node.js, get it from [nodejs.org](https://nodejs.org) or your package manager first.
+- A free NVIDIA NIM API key from [build.nvidia.com](https://build.nvidia.com). No credit card. 1000 credits per account. The first-launch wizard walks you through generating it.
+
+One command. The latest stable release tag is the version below; the badge at the top of this README always reflects the current tag if you want to upgrade:
 
 ```bash
-curl -sL https://github.com/PulsarOSDevTeam/pulsarcode/releases/download/vX.Y.Z/pulsarcode-vX.Y.Z.tar.gz \
+curl -sL https://github.com/PulsarOSDevTeam/pulsarcode/releases/download/v1.0.8/pulsarcode-v1.0.8.tar.gz \
   | tar -xzf - -C /tmp && \
-bash /tmp/pulsarcode-X.Y.Z/install.sh && \
+bash /tmp/pulsarcode-1.0.8/install.sh && \
 ~/.local/bin/pulsarcode
 ```
 
@@ -91,13 +98,6 @@ chosen model wired in.
 The one-liner uses `tar` instead of `unzip` so it works on minimal
 Linux images (Alpine, slim Debian) where `unzip` is not installed by
 default. A `.zip` release asset is published too for users who prefer it.
-
-**Requires** Node.js (so `npm` can auto-install Claude Code on first
-install if needed). Get it from [nodejs.org](https://nodejs.org) or your
-package manager if you do not have it. Claude Code itself is the official
-Anthropic CLI from [claude.com/claude-code](https://claude.com/claude-code);
-pulsarcode wraps it via the documented `ANTHROPIC_BASE_URL` hook and does
-not redistribute it.
 
 ---
 
@@ -422,16 +422,15 @@ full posture and the AGPL-3.0 fork-and-run path.
 
 ## Requirements
 
-| Component | Minimum | Recommended |
-|---|---|---|
-| OS | macOS 14 / Ubuntu 22.04 / Debian 13 / Fedora 40 | Latest |
-| Python | 3.11 | 3.14 |
-| Disk | 500 MB free for the venv | 1 GB |
-| Claude Code | Installed from [claude.com/claude-code](https://claude.com/claude-code) | Latest |
-| NVIDIA NIM account | Free, no card, no auto-charge | Same |
-| Network | Outbound HTTPS to `integrate.api.nvidia.com` | Same |
-
-Windows: use WSL2 for now (full native Windows support is planned).
+| Component | Minimum | Recommended | Notes |
+|---|---|---|---|
+| OS | macOS 14 / Ubuntu 22.04 / Debian 13 / Fedora 40 / Alpine 3.19 | Latest | Windows: use WSL2 for now (native Windows is planned). |
+| Python | 3.11 | 3.14 | Installer halts cleanly with a `brew` / `apt` one-liner if missing. |
+| Node.js (with `npm`) | Any LTS (18+) | Latest LTS | Needed so the installer can auto-pull Claude Code if it is not already present. Skip if Claude Code is already installed. Get it from [nodejs.org](https://nodejs.org). |
+| Claude Code | Installed from [claude.com/claude-code](https://claude.com/claude-code), **OR** auto-installed by the installer via `npm i -g @anthropic-ai/claude-code` if Node.js is present | Latest | The installer's step 1b decides. |
+| Disk | 500 MB free for the venv | 1 GB | |
+| NVIDIA NIM account | Free, no card, no auto-charge | Same | First-launch wizard walks you through generating the key at [build.nvidia.com](https://build.nvidia.com). 1000 credits per account. |
+| Network | Outbound HTTPS to `integrate.api.nvidia.com` | Same | The local adapter binds `127.0.0.1` only; the only outbound call is your bearer-authenticated request to NVIDIA NIM. |
 
 ---
 
