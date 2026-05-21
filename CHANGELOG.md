@@ -8,6 +8,40 @@ public releases.
 
 ---
 
+## v1.0.4  -  Picker first-keypress fix and anchored repaint
+
+Bug-fix release. Two issues in v1.0.3 caused a visibly broken picker:
+
+- **First keypress decoded as ENTER.** A trailing newline from the y/N
+  prompt was sitting in the kernel input queue when the picker took
+  over `stdin`; the picker's `sys.stdin.read(1)` consumed that newline
+  and selected the default model immediately. Fixed by reading bytes
+  directly from the tty file descriptor (`os.read`) instead of going
+  through Python's `TextIOWrapper` buffer, AND by flushing the kernel
+  input queue at cbreak-entry time via `termios.tcflush`.
+- **Visual drift on first paint and scroll.** The repaint loop used a
+  cursor-up move proportional to the previous paint height, which
+  desynchronizes whenever the terminal scrolls underneath. Fixed by
+  reserving enough vertical real estate for a full-height paint up
+  front (causing any necessary scroll to happen before any drawing),
+  saving that anchor cursor position (`\x1b7`), and restoring
+  (`\x1b8`) + clear-to-end (`\x1b[J`) before every repaint. The picker
+  now sits at a stable origin row through every arrow press.
+
+Suite still 21/21 on the CI matrix. The fix is keyboard-input plumbing
+plus terminal-control codes; behavioral tests are unchanged.
+
+### Upgrade
+
+```bash
+bash install.sh    # idempotent; refreshes canonical files
+```
+
+Your stored NIM key, current active model, and history file all carry
+over from v1.0.x.
+
+---
+
 ## v1.0.3  -  Every-launch wizard, recently-used model tier
 
 User-experience release. The picker now runs on every launch with a

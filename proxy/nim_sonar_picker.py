@@ -484,7 +484,13 @@ def _tty_available() -> bool:
 
 
 class _RawTTY:
-    """Context manager that puts stdin into cbreak mode (Unix only)."""
+    """Context manager that puts stdin into cbreak mode (Unix only).
+
+    Also flushes any pending bytes on the kernel input queue at enter
+    time so stale keystrokes from the previous bash `read` (e.g. the
+    trailing newline of a y/N confirm prompt) do not leak into the first
+    picker keypress and get decoded as ENTER.
+    """
 
     def __init__(self) -> None:
         self._fd: Optional[int] = None
@@ -498,6 +504,10 @@ class _RawTTY:
         self._fd = sys.stdin.fileno()
         self._saved = termios.tcgetattr(self._fd)
         tty.setcbreak(self._fd)
+        try:
+            termios.tcflush(self._fd, termios.TCIFLUSH)
+        except OSError:
+            pass
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -507,46 +517,58 @@ class _RawTTY:
         termios.tcsetattr(self._fd, termios.TCSADRAIN, self._saved)
 
 
-def _read_key() -> str:
+def _read_key(fd: int) -> str:
     """Return a token like 'UP', 'DOWN', 'ENTER', 'ESC', 'q', 'CTRL-C'.
 
-    Notes on the escape-sequence handling: terminals deliver arrow keys as a
-    three-byte CSI sequence (ESC '[' direction). On the FIRST keypress after
-    entering cbreak mode, the bytes can arrive in two chunks several tens of
-    milliseconds apart on some terminals (slow TTY paths, focus-change
-    delivery, GPU-accelerated terminals on macOS). A short inter-byte timeout
-    caused the bug where a first arrow press was treated as plain ESC and
-    cancelled the picker. We wait up to 200ms between bytes, which is
-    imperceptible to a human pressing ESC but plenty of time for any CSI
-    sequence to fully arrive.
+    Reads bytes directly from the tty file descriptor with `os.read` to
+    bypass Python's TextIOWrapper buffer on `sys.stdin`. That buffer can
+    hold bytes past `select.select` readiness checks and can carry stale
+    bytes from before cbreak mode was entered. Both behaviors have
+    historically caused the picker to misread its first keypress as
+    ENTER (selecting the default model immediately) or as ESC (cancelling).
+    Direct fd reads give us exact one-byte semantics aligned with the
+    `select` readiness signal.
+
+    Terminals deliver arrow keys as a three-byte CSI sequence
+    (ESC '[' direction). The three bytes can arrive tens of milliseconds
+    apart on slow TTY paths and on the first keypress after entering
+    cbreak mode. We wait up to 200ms between bytes, imperceptible to a
+    human pressing ESC but plenty for any CSI sequence to fully arrive.
     """
-    ch = sys.stdin.read(1)
-    if ch == "\x1b":
-        import select
-        # Wait up to 200ms for the next byte of a possible CSI sequence.
-        ready, _, _ = select.select([sys.stdin], [], [], 0.20)
+    import os
+    import select as _sel
+
+    raw = os.read(fd, 1)
+    if not raw:
+        return "EOF"
+    b = raw[0]
+
+    if b == 0x1B:  # ESC, possibly a CSI start
+        ready, _, _ = _sel.select([fd], [], [], 0.20)
         if not ready:
             return "ESC"
-        ch2 = sys.stdin.read(1)
-        if ch2 != "[":
+        ch2 = os.read(fd, 1)
+        if not ch2 or ch2[0] != 0x5B:  # not '['
             return "ESC"
-        # And up to 200ms for the third byte.
-        ready, _, _ = select.select([sys.stdin], [], [], 0.20)
+        ready, _, _ = _sel.select([fd], [], [], 0.20)
         if not ready:
             return "ESC"
-        ch3 = sys.stdin.read(1)
-        if ch3 == "A":
+        ch3 = os.read(fd, 1)
+        if not ch3:
+            return "ESC"
+        b3 = ch3[0]
+        if b3 == 0x41:  # 'A'
             return "UP"
-        if ch3 == "B":
+        if b3 == 0x42:  # 'B'
             return "DOWN"
-        if ch3 == "C":
+        if b3 == 0x43:  # 'C'
             return "RIGHT"
-        if ch3 == "D":
+        if b3 == 0x44:  # 'D'
             return "LEFT"
-        # Some terminals send numeric CSI sequences (e.g., for Page Up / Down,
-        # Home, End). Drain trailing bytes up to the terminator '~' so the
-        # next read does not see garbage.
-        if ch3.isdigit():
+        # Numeric CSI sequence (Page Up / Down / Home / End / etc.): drain
+        # trailing bytes up to terminator '~' so the next read does not see
+        # garbage.
+        if 0x30 <= b3 <= 0x39:
             for _ in range(8):
                 ready, _, _ = select.select([sys.stdin], [], [], 0.05)
                 if not ready:
@@ -711,25 +733,45 @@ def pick_model(
             return c - viewport + 1
         return top
 
+    # Reserve vertical real estate BEFORE saving the anchor, then save
+    # the cursor. This causes any terminal scrolling to happen up front,
+    # so subsequent restore-and-repaint always lands at the same anchored
+    # row and we never get visual drift / residue from variable-height
+    # paints (the v1.0.3 "list drifts when we scroll" report).
     if _ansi_enabled():
         out.write(_HIDE_CURSOR)
+        # Estimate paint height: viewport rows + 8 lines of chrome
+        # (banner top, title, banner bottom, hint, padding above/below,
+        # optional more-above / more-below indicators). One extra trailing
+        # line for safety, then move the cursor back up to the start so
+        # the anchor lands on the first row of the picker region.
+        reserved = viewport + 9
+        out.write("\n" * reserved)
+        out.write(f"\x1b[{reserved}F")
+        # DEC private save (\x1b7 / \x1b8) and the standard ANSI form
+        # (\x1b[s / \x1b[u) both work in Terminal.app and iTerm. Using
+        # the DEC variant because it is more universally supported.
+        out.write("\x1b7")
         out.flush()
 
     try:
-        with _RawTTY():
+        with _RawTTY() as rt:
+            fd = rt._fd
+            assert fd is not None
             while True:
-                # Clear previous paint
-                if last_paint_lines and _ansi_enabled():
-                    out.write(f"\x1b[{last_paint_lines}F")
+                if _ansi_enabled():
+                    # Restore to the saved anchor and clear to end-of-screen
+                    # so the next paint always starts at the same row, no
+                    # matter how many lines the previous paint emitted.
+                    out.write("\x1b8")
                     out.write("\x1b[J")
 
                 lines = render(rows, cursor, current_alias, window_top=window_top, viewport=viewport)
                 for line in lines:
                     out.write(line + "\n")
                 out.flush()
-                last_paint_lines = len(lines)
 
-                key = _read_key()
+                key = _read_key(fd)
 
                 if key == "UP":
                     cursor = _move(-1)
@@ -751,6 +793,12 @@ def pick_model(
                 # ignore everything else
     finally:
         if _ansi_enabled():
+            # Make sure cursor lands below the picker region before
+            # restoring visibility, so the launcher's "Launching Claude
+            # Code ..." message is not painted on top of the last picker
+            # frame.
+            out.write("\x1b8")
+            out.write("\x1b[J")
             out.write(_SHOW_CURSOR)
             out.flush()
 
