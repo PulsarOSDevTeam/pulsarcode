@@ -42,8 +42,11 @@ OFFICIAL_SOURCES: Tuple[Tuple[str, str], ...] = (
 
 STATIC_OFFICIAL_MODELS: Tuple[str, ...] = (
     "moonshotai/kimi-k2.6",
-    "moonshotai/kimi-k2-thinking",
-    "moonshotai/kimi-k2-instruct",
+    # v1.0.8: kimi-k2-thinking and kimi-k2-instruct removed. NVIDIA NIM no
+    # longer hosts these; the live /v1/models endpoint does not return
+    # them, and the chat completions endpoint replies with HTTP 410 Gone
+    # for any request that names them. Their static seed in this catalog
+    # caused the picker to advertise dead routes.
     "abacusai/dracarys-llama-3.1-70b-instruct",
     "bytedance/seed-oss-36b-instruct",
     "deepseek-ai/deepseek-v4-flash",
@@ -224,7 +227,7 @@ def record_for_upstream(
     if split is None:
         return None
     provider, model = split
-    context_tokens = 256000 if upstream_id in {"moonshotai/kimi-k2.6", "moonshotai/kimi-k2-thinking"} else None
+    context_tokens = 256000 if upstream_id == "moonshotai/kimi-k2.6" else None
     tag_set = tuple(dict.fromkeys(tags))
     if upstream_id == DEFAULT_MODEL:
         tag_set = tuple(dict.fromkeys(("default", "kimi-k2.6", "256k-context", *tag_set)))

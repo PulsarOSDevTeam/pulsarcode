@@ -45,13 +45,17 @@ VENV_DIR="$PULSAR_HOME/venv"
 #BIN_DIR overridable for smoke tests.
 BIN_DIR="${PULSARCODE_BIN_DIR:-$HOME/.local/bin}"
 
-# Colors (gated on TTY + NO_COLOR)
+# Colors (gated on TTY + NO_COLOR).
+# v1.0.8 fix: ANSI-C $'\033...' quoting so bash assigns the actual ESC byte
+# (0x1B) instead of the four literal characters "\033". Without this, the
+# heredoc banners printed the literal escape sequences as text on screen
+# instead of rendering as color.
 if [[ -t 2 && -z "${NO_COLOR:-}" ]]; then
-    EMBER="\033[38;5;208m"
-    GREEN="\033[38;5;46m"
-    DIM="\033[38;5;240m"
-    BOLD="\033[1m"
-    RESET="\033[0m"
+    EMBER=$'\033[38;5;208m'
+    GREEN=$'\033[38;5;46m'
+    DIM=$'\033[38;5;240m'
+    BOLD=$'\033[1m'
+    RESET=$'\033[0m'
 else
     EMBER=""; GREEN=""; DIM=""; BOLD=""; RESET=""
 fi
@@ -267,9 +271,9 @@ step_7_path_in_shell_rc() {
         touch "$shell_rc"
     fi
     if [[ "$shell_rc" == *config.fish ]]; then
-        printf '\n# Local Pulsar / pulsarcode\nset -gx PATH "%s" $PATH\n' "$BIN_DIR" >> "$shell_rc"
+        printf '\n# pulsarcode\nset -gx PATH "%s" $PATH\n' "$BIN_DIR" >> "$shell_rc"
     else
-        printf '\n# Local Pulsar / pulsarcode\nexport PATH="%s:$PATH"\n' "$BIN_DIR" >> "$shell_rc"
+        printf '\n# pulsarcode\nexport PATH="%s:$PATH"\n' "$BIN_DIR" >> "$shell_rc"
     fi
     print_ok "appended PATH export to $shell_rc"
     print_warn "open a new terminal tab or run: source $shell_rc"

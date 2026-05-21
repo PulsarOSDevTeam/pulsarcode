@@ -436,7 +436,7 @@ def render(
     lines: List[str] = []
     lines.append("")
     lines.append(_paint(_ascii_top(), _EMBER))
-    title = "| Local Pulsar  /  API Sonar  /  pick a model"
+    title = "| pulsarcode  /  API Sonar  /  pick a model"
     pad = 78 - len(title) - 1
     lines.append(_paint(title + (" " * pad) + "|", _EMBER))
     lines.append(_paint(_ascii_top(), _EMBER))
@@ -617,7 +617,7 @@ def _pick_numbered_fallback(
     # Re-render with numbers and tier headers, but skip the cursor highlight.
     write("")
     write(_paint(_ascii_top(), _EMBER))
-    title = "| Local Pulsar  /  API Sonar  /  numbered picker (no arrow keys here)"
+    title = "| pulsarcode  /  API Sonar  /  numbered picker (no arrow keys here)"
     pad = 78 - len(title) - 1
     write(_paint(title + (" " * pad) + "|", _EMBER))
     write(_paint(_ascii_top(), _EMBER))
@@ -655,10 +655,10 @@ def _pick_numbered_fallback(
     try:
         choice = int(raw)
     except ValueError:
-        write(_paint("  Local Pulsar: not a number, keeping current.", _DIM))
+        write(_paint("  pulsarcode: not a number, keeping current.", _DIM))
         return None
     if choice < 1 or choice > len(model_rows):
-        write(_paint(f"  Local Pulsar: number out of range (1 to {len(model_rows)}), keeping current.", _DIM))
+        write(_paint(f"  pulsarcode: number out of range (1 to {len(model_rows)}), keeping current.", _DIM))
         return None
     record = model_rows[choice - 1][1].record
     if record is None:
@@ -666,7 +666,7 @@ def _pick_numbered_fallback(
     write_active_model(record.alias)
     write_history(record.alias)
     write("")
-    write(_paint(f"  Local Pulsar: active model set to {record.alias}.", _GREEN))
+    write(_paint(f"  pulsarcode: active model set to {record.alias}.", _GREEN))
     return record.alias
 
 
@@ -684,14 +684,14 @@ def pick_model(
     write = lambda text: out.write(text + "\n")  # noqa: E731
 
     if not records:
-        write("Local Pulsar: empty NIM catalog. Run `pulsarcode /api` to set your key.")
+        write("pulsarcode: empty NIM catalog. Run `pulsarcode /api` to set your key.")
         return None
 
     history = read_history()
     groups = group_by_tier(records, history=history)
     rows = build_rows(groups)
     if not any(row.kind == "model" for row in rows):
-        write("Local Pulsar: no model rows in catalog after grouping.")
+        write("pulsarcode: no model rows in catalog after grouping.")
         return None
 
     if not sys.stdin.isatty():
@@ -699,7 +699,7 @@ def pick_model(
         for line in render(rows, cursor=-1, current_alias=current_alias):
             write(line)
         write("")
-        write("Local Pulsar: non-interactive shell. Run `pulsarcode pick` in a fresh terminal tab to use the picker.")
+        write("pulsarcode: non-interactive shell. Run `pulsarcode pick` in a fresh terminal tab to use the picker.")
         return None
 
     if not _tty_available():
@@ -846,9 +846,9 @@ def main() -> int:
 
     chosen = pick_model(records, current)
     if chosen is None:
-        print("Local Pulsar: selection unchanged. Active model stays at " + (current or "default") + ".", file=sys.stderr)
+        print("pulsarcode: selection unchanged. Active model stays at " + (current or "default") + ".", file=sys.stderr)
         return 1
-    print("Local Pulsar: active model set to " + chosen + ".", file=sys.stderr)
+    print("pulsarcode: active model set to " + chosen + ".", file=sys.stderr)
     print(chosen)
     return 0
 

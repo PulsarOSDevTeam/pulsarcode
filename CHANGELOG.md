@@ -8,6 +8,65 @@ public releases.
 
 ---
 
+## v1.0.8  -  Three demo-blocking fixes
+
+User-visible demo bugs caught while screen-recording the launch film
+against a real fresh-install on macOS:
+
+### Fix 1: Dead model routes removed from the catalog
+
+`moonshotai/kimi-k2-thinking` and `moonshotai/kimi-k2-instruct` were
+seeded in the static catalog but NVIDIA NIM no longer hosts them. The
+live `/v1/models` endpoint returns only `moonshotai/kimi-k2.6` from
+Moonshot. Any user who picked `nim-kimi-k2-thinking` or
+`nim-kimi-k2-instruct` in the picker then got `HTTP 410 Gone` from
+NVIDIA on their first Claude Code message. Both entries are now
+removed from `STATIC_OFFICIAL_MODELS` and from the context-token
+override map.
+
+If NVIDIA reinstates these endpoints in the future, the runtime
+catalog will pick them up live; nothing else needs to change.
+
+### Fix 2: `pulsarcode` branding consistent across all user-facing surfaces
+
+The picker title bar and ten status-line strings still read
+`Local Pulsar / API Sonar`. Those are now `pulsarcode / API Sonar`.
+The `proxy/__init__.py` and `tests/__init__.py` docstrings were
+updated for consistency. The shell-rc PATH comment that the installer
+writes into `~/.zshrc` / `~/.bashrc` is also corrected.
+
+### Fix 3: install.sh banners render in color instead of printing literal `\033[...m`
+
+The installer used double-quoted strings for the ANSI escape codes
+(`EMBER="\033[38;5;208m"`), which bash treats as four literal
+characters. The banners therefore printed the raw escape codes as
+plain text on screen. v1.0.8 switches to ANSI-C `$'\033...'` quoting
+so bash assigns the actual ESC byte (0x1B). The installer now renders
+the ember-orange / green / dim / bold colors it always intended.
+
+### Tests
+
+21/21 pass on the CI matrix. No behavior change in the picker,
+the adapter, or the API Sonar catalog beyond the two removed model
+ids; the existing suite covers every code path touched.
+
+### Upgrade
+
+```bash
+bash install.sh
+```
+
+Idempotent. Your stored NIM key, current `active_model`, and
+`model_history` carry over.
+
+### One-line install (latest)
+
+```bash
+curl -sL https://github.com/PulsarOSDevTeam/pulsarcode/releases/download/v1.0.8/pulsarcode-v1.0.8.tar.gz | tar -xzf - -C /tmp && bash /tmp/pulsarcode-1.0.8/install.sh && ~/.local/bin/pulsarcode
+```
+
+---
+
 ## v1.0.7  -  Picker NameError on Enter (and numeric-CSI drain)
 
 Bug-fix release. v1.0.4 rewrote `_read_key` to read bytes directly from
