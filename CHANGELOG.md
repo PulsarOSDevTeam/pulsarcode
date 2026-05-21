@@ -8,6 +8,49 @@ public releases.
 
 ---
 
+## v1.0.7  -  Picker NameError on Enter (and numeric-CSI drain)
+
+Bug-fix release. v1.0.4 rewrote `_read_key` to read bytes directly from
+the tty file descriptor via `os.read`, but the rewrite missed two
+trailing sections of the function that still referenced the old
+`ch = sys.stdin.read(1)` variable name and a bare `select` import. The
+result was a Python `NameError` flashing on screen every time a picker
+user pressed Enter, Ctrl-C, Tab, or any unmapped key, and another
+NameError when any function key sent a numeric CSI sequence (Page Up,
+Page Down, Home, End). The picker's launcher caller swallowed the
+traceback so Claude Code still opened, but the user's model selection
+never persisted, which is why the banner kept showing the default
+model after Enter on the picker.
+
+### What changed
+
+- `_read_key` final block now does byte-precise checks against `b`
+  (the byte read by `os.read(fd, 1)` at the top of the function):
+  `b == 0x0D or b == 0x0A` for ENTER, `b == 0x03` for CTRL-C,
+  `b == 0x09` for TAB, `chr(b)` for printable ASCII passthrough.
+- Numeric-CSI drain branch now uses `_sel.select([fd], ...)` and
+  `os.read(fd, 1)` instead of the bare `select.select` /
+  `sys.stdin.read(1)` references that were also leftover from the
+  pre-v1.0.4 implementation.
+
+The fix is twelve lines across one file. Behavior of the picker is
+unchanged on every other path; this release only stops the flash and
+makes Enter actually persist the chosen alias to
+`~/.pulsarcode/active_model` and `~/.pulsarcode/model_history`.
+
+### Upgrade
+
+```bash
+bash install.sh
+```
+
+Idempotent. Your stored NIM key, current `active_model`, and
+`model_history` carry over from v1.0.x.
+
+Tests still 21/21 on the CI matrix.
+
+---
+
 ## v1.0.6  -  Claude Code pre-flight + tar.gz release asset
 
 Two fixes that close the last gaps a first-time user could hit with the

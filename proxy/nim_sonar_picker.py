@@ -568,24 +568,32 @@ def _read_key(fd: int) -> str:
             return "LEFT"
         # Numeric CSI sequence (Page Up / Down / Home / End / etc.): drain
         # trailing bytes up to terminator '~' so the next read does not see
-        # garbage.
+        # garbage. v1.0.7: read via os.read on the cbreak fd, not through
+        # Python's sys.stdin buffer, matching the rest of this function.
         if 0x30 <= b3 <= 0x39:
             for _ in range(8):
-                ready, _, _ = select.select([sys.stdin], [], [], 0.05)
+                ready, _, _ = _sel.select([fd], [], [], 0.05)
                 if not ready:
                     break
-                terminator = sys.stdin.read(1)
-                if terminator == "~":
+                terminator = os.read(fd, 1)
+                if terminator and terminator[0] == 0x7E:  # '~'
                     break
             return "ESC"
         return "ESC"
-    if ch in ("\r", "\n"):
+
+    # v1.0.7: byte-precise checks on the single byte we read above. The
+    # previous code referenced an undefined `ch` left over from the
+    # pre-v1.0.4 sys.stdin.read(1) implementation, which raised
+    # NameError on every Enter / Ctrl-C / Tab / unmapped key.
+    if b == 0x0D or b == 0x0A:   # CR or LF
         return "ENTER"
-    if ch == "\x03":
+    if b == 0x03:                 # Ctrl-C
         return "CTRL-C"
-    if ch == "\t":
+    if b == 0x09:                 # TAB
         return "TAB"
-    return ch
+    if 0x20 <= b <= 0x7E:
+        return chr(b)
+    return ""
 
 
 # ---------------------------------------------------------------------------
