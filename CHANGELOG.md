@@ -8,6 +8,58 @@ public releases.
 
 ---
 
+## v1.0.6  -  Claude Code pre-flight + tar.gz release asset
+
+Two fixes that close the last gaps a first-time user could hit with the
+one-line install command.
+
+### Fix 1: Claude Code pre-flight
+
+The launcher now validates that the official Anthropic Claude Code CLI
+is installed BEFORE running the every-launch wizard. Previously a user
+without Claude Code would go through API key paste plus arrow-key model
+picker, and only then hit a `127` exit code. That UX is gone.
+
+The installer also pre-flights `claude` before building the venv. If
+the binary is missing and `npm` is on the user's machine, the installer
+auto-runs `npm install -g @anthropic-ai/claude-code` and continues. If
+`npm` is also missing, the installer halts with a clear pointer at
+[nodejs.org](https://nodejs.org) and at the
+[Claude Code install docs](https://claude.com/claude-code).
+
+This means the one-liner can succeed end to end for a user with nothing
+but Node.js installed: pulsarcode pulls in Claude Code for them.
+
+### Fix 2: `.tar.gz` release asset
+
+A `.tar.gz` release asset (`pulsarcode-vX.Y.Z.tar.gz`) ships alongside
+the existing `.zip`. The published one-liner uses `tar -xzf` so it
+works out of the box on minimal Linux images (Alpine, slim Debian,
+fresh Ubuntu cloud images) that do not have `unzip` installed by
+default. The `.zip` asset is still published for users who prefer it.
+
+### Upgrade
+
+```bash
+bash install.sh
+```
+
+Idempotent. Your stored NIM key, current `active_model`, and
+`model_history` carry over from v1.0.x.
+
+### One-line install (new)
+
+```bash
+curl -sL https://github.com/PulsarOSDevTeam/pulsarcode/releases/download/v1.0.6/pulsarcode-v1.0.6.tar.gz \
+  | tar -xzf - -C /tmp && \
+bash /tmp/pulsarcode-1.0.6/install.sh && \
+~/.local/bin/pulsarcode
+```
+
+Tests still 21/21 on the CI matrix.
+
+---
+
 ## v1.0.5  -  Copy polish across every user-facing surface
 
 Documentation-only release. No code behavior change. Brings every

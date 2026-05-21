@@ -509,6 +509,37 @@ fi
 
 case "$SUB" in
     launch)
+        # v1.0.6: fail fast if the official Anthropic Claude Code CLI is not
+        # installed. pulsarcode is a wrapper, it cannot work without the
+        # underlying binary. Doing this check BEFORE the wizard saves the
+        # user from going through API-key paste + model picker only to hit
+        # the failure at the end.
+        if [[ -z "$CLAUDE_BIN" ]]; then
+            cat <<'CLAUDE_MISSING' >&2
+
++----------------------------------------------------------------------------+
+| pulsarcode  -  Claude Code CLI not found                                   |
++----------------------------------------------------------------------------+
+
+ pulsarcode is a wrapper around the official Anthropic Claude Code CLI;
+ the CLI itself must be installed before pulsarcode can launch it.
+
+ Quickest install (any platform with Node.js):
+
+     npm install -g @anthropic-ai/claude-code
+
+ If you do not have Node.js / npm, install Node first
+ (https://nodejs.org or your package manager), then re-run the npm command.
+
+ Full Claude Code install docs:
+     https://claude.com/claude-code
+
+ Then run `pulsarcode` again. Your stored NIM key and current model
+ selection survive across re-runs, so you will not be re-prompted.
+
+CLAUDE_MISSING
+            exit 127
+        fi
         run_launch_wizard
         ;;
 esac
@@ -618,9 +649,13 @@ PY
         exit 0
         ;;
     launch)
+        # Claude Code presence was already validated above before the wizard
+        # ran; we re-check here only as a paranoia guard for very fast PATH
+        # changes during the wizard. The full error UX lives in the top check.
         if [[ -z "$CLAUDE_BIN" ]]; then
             echo "pulsarcode: Claude Code binary not found." >&2
-            echo "  Install it from https://claude.com/claude-code" >&2
+            echo "  Install it: npm install -g @anthropic-ai/claude-code" >&2
+            echo "  Or see: https://claude.com/claude-code" >&2
             exit 127
         fi
         load_nim_key

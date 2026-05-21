@@ -130,6 +130,63 @@ step_1_check_os_and_python() {
     print_ok "Python: $PYTHON_CMD ($pyver)"
 }
 
+# v1.0.6: pre-flight the Claude Code dependency BEFORE building the venv
+# so the user is never told "Claude Code missing" after a successful install.
+# If the binary is absent and npm is available, auto-install Anthropic's
+# official package. If neither is available, print clear instructions and
+# halt with a non-zero exit code so the failure is loud.
+step_1b_check_claude_code() {
+    print_step "1b" "checking for Claude Code CLI (Anthropic's official binary)"
+
+    if command -v claude >/dev/null 2>&1; then
+        local v
+        v="$(claude --version 2>&1 | head -1 | tr -d '\r\n')"
+        if [[ -n "$v" ]]; then
+            print_ok "Claude Code present ($v)"
+        else
+            print_ok "Claude Code present"
+        fi
+        return 0
+    fi
+
+    print_warn "Claude Code CLI not found on PATH"
+    print_warn "pulsarcode is a wrapper; the official Anthropic CLI is required upstream"
+
+    if command -v npm >/dev/null 2>&1; then
+        echo "         attempting auto-install via npm ..."
+        local npm_log
+        npm_log="$(mktemp -t pulsarcode_npm.XXXXXX)"
+        if npm install -g @anthropic-ai/claude-code >"$npm_log" 2>&1; then
+            if command -v claude >/dev/null 2>&1; then
+                local v2
+                v2="$(claude --version 2>&1 | head -1 | tr -d '\r\n')"
+                print_ok "Claude Code installed via npm${v2:+ ($v2)}"
+                rm -f "$npm_log"
+                return 0
+            fi
+            print_warn "npm install completed but 'claude' is still not on PATH"
+            print_warn "check your npm global prefix: 'npm config get prefix'"
+            print_warn "details: $npm_log"
+        else
+            print_warn "npm install -g @anthropic-ai/claude-code failed"
+            print_warn "log saved at $npm_log"
+            print_warn "common cause: global install needs sudo, OR npm prefix is misconfigured"
+        fi
+    else
+        print_warn "npm not found; cannot auto-install Claude Code"
+    fi
+
+    print_err "Claude Code is required for pulsarcode to function."
+    echo "    Quickest manual install (any platform with Node.js):"
+    echo "        npm install -g @anthropic-ai/claude-code"
+    echo "    If you do not have Node.js, install it first:"
+    echo "        https://nodejs.org  or your distro's package manager."
+    echo "    Full Claude Code install docs:"
+    echo "        https://claude.com/claude-code"
+    echo "    Then re-run this installer."
+    exit 1
+}
+
 step_2_layout() {
     print_step 2 "creating $PULSAR_HOME layout"
     mkdir -p "$CANONICAL_DIR" "$CANONICAL_DIR/proxy" "$CANONICAL_DIR/tests"
@@ -280,6 +337,7 @@ NEXT
 main() {
     print_banner
     step_1_check_os_and_python
+    step_1b_check_claude_code
     step_2_layout
     step_3_copy_canonical
     step_4_venv

@@ -74,23 +74,30 @@ the picker keeps your current model and goes straight to Claude Code.
 One command. Replace `vX.Y.Z` with the [latest release tag](https://github.com/PulsarOSDevTeam/pulsarcode/releases/latest) (the badge above shows it):
 
 ```bash
-curl -sL https://github.com/PulsarOSDevTeam/pulsarcode/releases/download/vX.Y.Z/pulsarcode-vX.Y.Z.zip \
-  -o /tmp/pulsarcode.zip && \
-unzip -oq /tmp/pulsarcode.zip -d /tmp && \
+curl -sL https://github.com/PulsarOSDevTeam/pulsarcode/releases/download/vX.Y.Z/pulsarcode-vX.Y.Z.tar.gz \
+  | tar -xzf - -C /tmp && \
 bash /tmp/pulsarcode-X.Y.Z/install.sh && \
 ~/.local/bin/pulsarcode
 ```
 
-That is it. The first launch walks you through generating a free NVIDIA NIM
-API key, picking a model with arrow keys, and handing off to the official
-Claude Code CLI with your chosen model wired in.
+That is it. The installer pre-flights the Claude Code CLI (auto-installing
+it via `npm i -g @anthropic-ai/claude-code` if Node.js is on your machine
+and the binary is missing), builds an isolated Python venv, installs the
+adapter, and hands off to the first `pulsarcode` launch. The wizard walks
+you through generating a free NVIDIA NIM API key, picking a model with
+arrow keys, and dropping you into the official Claude Code CLI with your
+chosen model wired in.
 
-Prefer manual install? Download the release zip from the Releases page,
-`bash install.sh`, then run `pulsarcode` from any project directory.
+The one-liner uses `tar` instead of `unzip` so it works on minimal
+Linux images (Alpine, slim Debian) where `unzip` is not installed by
+default. A `.zip` release asset is published too for users who prefer it.
 
-**Requires** Claude Code installed from
-[claude.com/claude-code](https://claude.com/claude-code) (free download,
-official Anthropic CLI). pulsarcode wraps it; it does not redistribute it.
+**Requires** Node.js (so `npm` can auto-install Claude Code on first
+install if needed). Get it from [nodejs.org](https://nodejs.org) or your
+package manager if you do not have it. Claude Code itself is the official
+Anthropic CLI from [claude.com/claude-code](https://claude.com/claude-code);
+pulsarcode wraps it via the documented `ANTHROPIC_BASE_URL` hook and does
+not redistribute it.
 
 ---
 
