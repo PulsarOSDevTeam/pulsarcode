@@ -52,13 +52,21 @@ class NIMSettings:
     preflight_ttl_s: float = 30.0
     preflight_timeout_s: float = 5.0
     stream_header_timeout_s: float = 180.0
+    # Reasoning-model header timeout. NVIDIA's NIM endpoint frequently
+    # holds the HTTP response while a reasoning model deliberates, so
+    # the standard 180s header timeout fires before any HTTP status
+    # code arrives. The reasoning-specific timeout gives upstream up
+    # to 6 minutes to begin responding. Override via
+    # PULSAR_NIM_STREAM_HEADER_TIMEOUT_REASONING.
+    stream_header_timeout_reasoning_s: float = 360.0
     stream_ping_interval_s: float = 5.0
     # First-token timeout: the maximum time the streaming endpoint waits
-    # for the first content token from upstream before aborting and
-    # returning a clear notice inside Claude Code. Default 90s for
-    # standard models; reasoning models default to 300s because internal
-    # chain-of-thought commonly extends the pre-first-token window.
-    # Override via PULSAR_NIM_FIRST_TOKEN_TIMEOUT and
+    # for the first content token from upstream AFTER the stream has
+    # opened, before aborting and returning a clear notice inside Claude
+    # Code. Default 90s for standard models; reasoning models default to
+    # 300s because internal chain-of-thought commonly extends the
+    # pre-first-token window. Override via
+    # PULSAR_NIM_FIRST_TOKEN_TIMEOUT and
     # PULSAR_NIM_FIRST_TOKEN_TIMEOUT_REASONING.
     first_token_timeout_s: float = 90.0
     first_token_timeout_reasoning_s: float = 300.0
@@ -330,7 +338,16 @@ def should_return_api_issue_as_message(status_code: int) -> bool:
     return status_code in {401, 403, 429, 500, 502, 503, 504}
 
 
-def nim_issue_notice_text(settings: NIMSettings, status_code: int, detail: str = "") -> str:
+def nim_issue_notice_text(
+    settings: NIMSettings,
+    status_code: int,
+    detail: str = "",
+    upstream_model_id: Optional[str] = None,
+    public_alias: Optional[str] = None,
+) -> str:
+    active_model = upstream_model_id or settings.nim_model
+    active_alias = public_alias or settings.public_model
+    is_reasoning_active = is_reasoning_model(active_model)
     if status_code == 429:
         headline = "NVIDIA NIM returned 429 Too Many Requests."
         meaning = (
@@ -355,6 +372,45 @@ def nim_issue_notice_text(settings: NIMSettings, status_code: int, detail: str =
             "Paste a fresh key:\n"
             "  pulsarcode /api"
         )
+    elif status_code == 504:
+        headline = "NVIDIA NIM did not start responding before the local wait window closed."
+        if is_reasoning_active:
+            meaning = (
+                "The selected model is a reasoning route. NVIDIA's NIM endpoint "
+                "holds the HTTP response while the model deliberates, and on "
+                "short prompts the wait can exceed several minutes. The local "
+                "adapter aborted after the reasoning-model header wait expired."
+            )
+            action = (
+                "Recovery options:\n"
+                "  1. Retry the same prompt; reasoning latency varies by run.\n"
+                "  2. Switch to a non-reasoning model: in a fresh terminal tab,\n"
+                "     run `pulsarcode pick` and choose a route without the\n"
+                "     `reasoning` tag (suggestions: nim-kimi,\n"
+                "     nim-deepseek-ai-deepseek-v4-flash, nim-openai-gpt-oss-120b).\n"
+                "  3. Extend the wait: set\n"
+                "       PULSAR_NIM_STREAM_HEADER_TIMEOUT_REASONING=<seconds>\n"
+                "     and / or\n"
+                "       PULSAR_NIM_FIRST_TOKEN_TIMEOUT_REASONING=<seconds>\n"
+                "     before launching pulsarcode."
+            )
+        else:
+            meaning = (
+                "The local adapter is healthy. NVIDIA's NIM endpoint did not "
+                "begin returning HTTP response headers within the local wait "
+                "window for the selected model."
+            )
+            action = (
+                "Recovery options:\n"
+                "  1. Retry the same prompt; upstream may have been transiently overloaded.\n"
+                "  2. Switch model: in a fresh terminal tab, run `pulsarcode pick`\n"
+                "     and choose a different alias (`nim-kimi` is the default and\n"
+                "     most stable choice).\n"
+                "  3. Extend the wait: set\n"
+                "       PULSAR_NIM_STREAM_HEADER_TIMEOUT=<seconds>\n"
+                "     before launching pulsarcode.\n"
+                "  4. Check NVIDIA's status page at https://status.nvidia.com/."
+            )
     else:
         headline = f"NVIDIA NIM returned HTTP {status_code}."
         meaning = (
@@ -369,24 +425,40 @@ def nim_issue_notice_text(settings: NIMSettings, status_code: int, detail: str =
     short_detail = " ".join(str(detail or "").split())
     if len(short_detail) > 420:
         short_detail = short_detail[:420] + "..."
+    panel_block = (
+        ""
+        if status_code == 504
+        else (
+            "Panel flow when you paste:\n"
+            f"  1. Open {NIM_SETUP_URL}\n"
+            "  2. Sign in, or create an NVIDIA account on that page.\n"
+            "  3. Click Get API Key in the model page right pane.\n"
+            "  4. Click Generate Key, copy the key that starts with nvapi-, then paste it.\n\n"
+        )
+    )
     return (
         f"{headline}\n\n"
         f"{meaning}\n\n"
         f"{action}\n\n"
-        "Panel flow when you paste:\n"
-        f"  1. Open {NIM_SETUP_URL}\n"
-        "  2. Sign in, or create an NVIDIA account on that page.\n"
-        "  3. Click Get API Key in the model page right pane.\n"
-        "  4. Click Generate Key, copy the key that starts with nvapi-, then paste it.\n\n"
+        f"{panel_block}"
         f"Official NVIDIA quickstart: {NIM_QUICKSTART_URL}\n"
-        f"Active model: {settings.nim_model}\n"
-        f"Local alias: {settings.public_model}"
+        f"Active model: {active_model}\n"
+        f"Local alias: {active_alias}"
         + (f"\nUpstream detail: {short_detail}" if short_detail else "")
     )
 
 
-def rate_limit_notice_text(settings: NIMSettings) -> str:
-    return nim_issue_notice_text(settings, 429)
+def rate_limit_notice_text(
+    settings: NIMSettings,
+    upstream_model_id: Optional[str] = None,
+    public_alias: Optional[str] = None,
+) -> str:
+    return nim_issue_notice_text(
+        settings,
+        429,
+        upstream_model_id=upstream_model_id,
+        public_alias=public_alias,
+    )
 
 
 def first_token_timeout_notice_text(
@@ -562,17 +634,23 @@ def _stop_reason_from_openai(finish_reason: Any) -> str:
 async def open_nim_stream(
     settings: NIMSettings,
     body: Dict[str, Any],
+    header_timeout_s: Optional[float] = None,
 ) -> tuple[Optional[httpx.AsyncClient], Optional[httpx.Response], Optional[JSONResponse]]:
     oai_body = build_openai_body(body, settings, stream=True)
     headers = {
         "Authorization": "Bearer " + settings.api_key,
         "Content-Type": "application/json",
     }
+    effective_header_timeout = (
+        header_timeout_s
+        if header_timeout_s is not None
+        else settings.stream_header_timeout_s
+    )
     timeout = httpx.Timeout(
-        settings.stream_header_timeout_s,
-        connect=min(5.0, settings.stream_header_timeout_s),
-        read=settings.stream_header_timeout_s,
-        write=settings.stream_header_timeout_s,
+        effective_header_timeout,
+        connect=min(5.0, effective_header_timeout),
+        read=effective_header_timeout,
+        write=effective_header_timeout,
         pool=5.0,
     )
     client = httpx.AsyncClient(timeout=timeout)
@@ -756,7 +834,20 @@ async def anthropic_stream_from_nim(
         "content_block": {"type": "text", "text": ""},
     })
 
-    open_task = asyncio.create_task(open_nim_stream(settings, body))
+    # Resolve the upstream model id once so the reasoning-aware timeouts
+    # and the error notices can name the model the user actually picked,
+    # not the launcher default.
+    upstream_model_id_early = build_openai_body(body, settings, stream=True)["model"]
+    is_reasoning_early = is_reasoning_model(str(upstream_model_id_early))
+    header_timeout_s = (
+        settings.stream_header_timeout_reasoning_s
+        if is_reasoning_early
+        else settings.stream_header_timeout_s
+    )
+
+    open_task = asyncio.create_task(
+        open_nim_stream(settings, body, header_timeout_s=header_timeout_s)
+    )
     ping_interval = max(0.05, settings.stream_ping_interval_s)
     while not open_task.done():
         try:
@@ -771,7 +862,13 @@ async def anthropic_stream_from_nim(
 
     if stream_error is not None:
         detail = _json_response_error_detail(stream_error)
-        text = nim_issue_notice_text(settings, stream_error.status_code, detail)
+        text = nim_issue_notice_text(
+            settings,
+            stream_error.status_code,
+            detail,
+            upstream_model_id=str(upstream_model_id_early),
+            public_alias=response_model or settings.public_model,
+        )
         output_tokens = max(1, len(text.split()))
         yield _sse("content_block_delta", {
             "type": "content_block_delta",
@@ -958,6 +1055,7 @@ def make_app(settings: Optional[NIMSettings] = None) -> FastAPI:
             preflight_ttl_s=float(os.environ.get("PULSAR_NIM_PREFLIGHT_TTL", "30")),
             preflight_timeout_s=float(os.environ.get("PULSAR_NIM_PREFLIGHT_TIMEOUT", "5")),
             stream_header_timeout_s=float(os.environ.get("PULSAR_NIM_STREAM_HEADER_TIMEOUT", "180")),
+            stream_header_timeout_reasoning_s=float(os.environ.get("PULSAR_NIM_STREAM_HEADER_TIMEOUT_REASONING", "360")),
             stream_ping_interval_s=float(os.environ.get("PULSAR_NIM_STREAM_PING_INTERVAL", "5")),
             first_token_timeout_s=float(os.environ.get("PULSAR_NIM_FIRST_TOKEN_TIMEOUT", "90")),
             first_token_timeout_reasoning_s=float(os.environ.get("PULSAR_NIM_FIRST_TOKEN_TIMEOUT_REASONING", "300")),
@@ -1034,8 +1132,20 @@ def make_app(settings: Optional[NIMSettings] = None) -> FastAPI:
     async def messages(req: Request):
         body = await req.json()
         response_model = presentation_model_for_request(body, settings)
+        # Resolve the upstream model id once so every error notice can
+        # name the model the user actually picked, not the launcher default.
+        try:
+            request_upstream_id = build_openai_body(body, settings, stream=True)["model"]
+        except Exception:
+            request_upstream_id = settings.nim_model
         if not settings.api_key:
-            text = nim_issue_notice_text(settings, 401, "NVIDIA_NIM_API_KEY is not set")
+            text = nim_issue_notice_text(
+                settings,
+                401,
+                "NVIDIA_NIM_API_KEY is not set",
+                upstream_model_id=str(request_upstream_id),
+                public_alias=response_model,
+            )
             if bool(body.get("stream", False)):
                 return StreamingResponse(
                     anthropic_text_stream(settings, text, response_model=response_model),
@@ -1048,7 +1158,12 @@ def make_app(settings: Optional[NIMSettings] = None) -> FastAPI:
                 should_return_api_issue_as_message(preflight_error.status_code)
                 and (preflight_error.status_code != 429 or should_return_rate_limit_as_message())
             ):
-                text = nim_issue_notice_text(settings, preflight_error.status_code)
+                text = nim_issue_notice_text(
+                    settings,
+                    preflight_error.status_code,
+                    upstream_model_id=str(request_upstream_id),
+                    public_alias=response_model,
+                )
                 if bool(body.get("stream", False)):
                     return StreamingResponse(
                         anthropic_text_stream(settings, text, response_model=response_model),
@@ -1070,7 +1185,13 @@ def make_app(settings: Optional[NIMSettings] = None) -> FastAPI:
             ):
                 return anthropic_text_message(
                     settings,
-                    nim_issue_notice_text(settings, response.status_code, response.text),
+                    nim_issue_notice_text(
+                        settings,
+                        response.status_code,
+                        response.text,
+                        upstream_model_id=str(request_upstream_id),
+                        public_alias=response_model,
+                    ),
                     response_model=response_model,
                 )
             return _upstream_error(response.status_code, response.text)
@@ -1098,6 +1219,7 @@ def main() -> None:
         preflight_ttl_s=float(os.environ.get("PULSAR_NIM_PREFLIGHT_TTL", "30")),
         preflight_timeout_s=float(os.environ.get("PULSAR_NIM_PREFLIGHT_TIMEOUT", "5")),
         stream_header_timeout_s=float(os.environ.get("PULSAR_NIM_STREAM_HEADER_TIMEOUT", "180")),
+        stream_header_timeout_reasoning_s=float(os.environ.get("PULSAR_NIM_STREAM_HEADER_TIMEOUT_REASONING", "360")),
         stream_ping_interval_s=float(os.environ.get("PULSAR_NIM_STREAM_PING_INTERVAL", "5")),
         first_token_timeout_s=float(os.environ.get("PULSAR_NIM_FIRST_TOKEN_TIMEOUT", "90")),
         first_token_timeout_reasoning_s=float(os.environ.get("PULSAR_NIM_FIRST_TOKEN_TIMEOUT_REASONING", "300")),

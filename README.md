@@ -499,19 +499,26 @@ slower first token` in the meta column; on short prompts these
 routes can spend 30 seconds to several minutes before the first
 content token.
 
-The adapter has a configurable first-token timeout that aborts the
-upstream request and returns a clear notice inside Claude Code if no
-content arrives in the window. Defaults:
+The adapter has two configurable timeouts that abort the upstream
+request and return a clear notice inside Claude Code when a model
+takes too long. Defaults:
 
-- 90 seconds for standard models (override via
-  `PULSAR_NIM_FIRST_TOKEN_TIMEOUT`).
-- 300 seconds for reasoning-tagged models (override via
-  `PULSAR_NIM_FIRST_TOKEN_TIMEOUT_REASONING`).
+- **HTTP header wait** (time for NVIDIA to return the response code):
+  180 seconds for standard models, 360 seconds for reasoning-tagged
+  models. Override with `PULSAR_NIM_STREAM_HEADER_TIMEOUT` and
+  `PULSAR_NIM_STREAM_HEADER_TIMEOUT_REASONING`.
+- **First content token wait** (time for the first SSE chunk after
+  headers arrive): 90 seconds for standard models, 300 seconds for
+  reasoning-tagged models. Override with
+  `PULSAR_NIM_FIRST_TOKEN_TIMEOUT` and
+  `PULSAR_NIM_FIRST_TOKEN_TIMEOUT_REASONING`.
 
-If a model is consistently slow on short prompts, switch model in a
-fresh terminal tab with `pulsarcode pick` and pick a route without
-the `reasoning` tag (`nim-kimi` is the default and most stable
-choice).
+A reasoning-tagged model can wait up to about 11 minutes total
+before the adapter falls back to a recovery notice naming the model
+and suggesting non-reasoning alternatives. If a model is consistently
+slow on short prompts, switch model in a fresh terminal tab with
+`pulsarcode pick` and pick a route without the `reasoning` tag
+(`nim-kimi` is the default and most stable choice).
 
 ### `429 Too Many Requests`
 

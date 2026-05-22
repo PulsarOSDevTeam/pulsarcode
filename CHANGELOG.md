@@ -8,6 +8,53 @@ public releases.
 
 ---
 
+## v1.0.11  -  Reasoning-aware header timeout, correct error labels
+
+### Added
+
+- **Reasoning-aware HTTP header timeout.** NVIDIA's NIM endpoint
+  frequently holds the HTTP response while a reasoning model
+  deliberates; the prior 180-second header timeout aborted requests
+  before any response code arrived. The streaming path now resolves
+  the upstream model id before opening the connection, checks
+  `is_reasoning_model`, and uses `stream_header_timeout_reasoning_s`
+  (default 360 seconds) for reasoning models while standard models
+  keep the 180-second default. Combined with the first-token timeout
+  (90s standard, 300s reasoning), a reasoning-tagged route now has
+  up to about 11 minutes total patience before the adapter falls
+  back to a recovery notice.
+- **One new environment override**:
+  `PULSAR_NIM_STREAM_HEADER_TIMEOUT_REASONING` (default `360`).
+
+### Fixed
+
+- **Error notices now name the actual requested upstream model.**
+  Calls to `nim_issue_notice_text` previously rendered
+  `Active model: moonshotai/kimi-k2.6` even when the user had picked
+  a different route, because the function used the launcher-default
+  from `settings.nim_model`. The function now accepts an
+  `upstream_model_id` and `public_alias`, and the messages endpoint
+  resolves the requested model id once and passes it through every
+  error path.
+- **HTTP 504 (header-timeout) notice rewritten** to explain the
+  reasoning-model behavior when applicable, with explicit recovery
+  steps ( `pulsarcode pick`, suggested non-reasoning alternatives,
+  env override for the timeout ). The previous notice surfaced the
+  generic "did not complete this request" copy.
+
+### Notes
+
+This release does not change the wire format the adapter speaks to
+Claude Code, the catalog merge algorithm, the picker keypress
+handling, or the install flow. It widens reasoning-model patience
+and corrects the model labels in error output.
+
+### Tests
+
+21/21 pass on every CI matrix slot.
+
+---
+
 ## v1.0.10  -  Reasoning-model annotation, first-token timeout
 
 ### Added
