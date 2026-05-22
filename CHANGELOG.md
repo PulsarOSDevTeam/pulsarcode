@@ -8,6 +8,45 @@ public releases.
 
 ---
 
+## v1.0.10  -  Reasoning-model annotation, first-token timeout
+
+### Added
+
+- **`reasoning` tag in the catalog.** Known reasoning / chain-of-thought
+  upstream model IDs are annotated with a `reasoning` tag in
+  `nim_api_sonar`. The picker surfaces the tag in the meta column as
+  `reasoning, slower first token` so the model latency profile is
+  visible at pick time, not at "Hello" time. Initial tagged set:
+  `deepseek-ai/deepseek-v4-pro`,
+  `nvidia/llama-3.1-nemotron-ultra-253b-v1`. Any upstream ID whose
+  name contains `reasoning` or `thinking` is tagged automatically.
+- **First-token timeout in the streaming adapter.** The
+  `anthropic_stream_from_nim` path now tracks time since stream-open
+  and aborts the upstream request if no content token arrives within
+  the configured window. Default 90 seconds for standard models;
+  reasoning-tagged models get 300 seconds. When the timeout fires,
+  the adapter yields a clean text message inside Claude Code with the
+  upstream model id, the timeout value, and explicit recovery steps
+  (switch model via `pulsarcode pick`, or extend the timeout via env
+  var). The session no longer hangs silently when an upstream model
+  fails to produce content.
+- **Two new environment overrides**:
+  `PULSAR_NIM_FIRST_TOKEN_TIMEOUT` (default `90`) and
+  `PULSAR_NIM_FIRST_TOKEN_TIMEOUT_REASONING` (default `300`).
+
+### Notes
+
+This release does not change the wire format the adapter speaks to
+Claude Code, the catalog merge algorithm, the picker keypress
+handling, or the install flow. It adds two settings and one watchdog
+inside the streaming path.
+
+### Tests
+
+21/21 pass on every CI matrix slot.
+
+---
+
 ## v1.0.9  -  Catalog truth, dependency hygiene, copy polish
 
 ### Changed

@@ -389,7 +389,9 @@ def _describe(record: NIMModelRecord) -> str:
         bits.append(f"ctx={record.context_tokens // 1000}K")
     if "default" in record.tags:
         bits.append("default")
-    if "authorized" == record.confidence:
+    if "reasoning" in record.tags:
+        bits.append("reasoning, slower first token")
+    if record.confidence == "authorized":
         bits.append("key-visible")
     elif record.confidence == "public":
         bits.append("public-source")

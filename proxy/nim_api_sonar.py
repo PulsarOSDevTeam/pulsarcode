@@ -126,6 +126,25 @@ BAD_PROVIDERS = {
     "v1",
 }
 
+# Upstream IDs known to be reasoning / chain-of-thought variants. These
+# models can spend tens of seconds to several minutes on internal
+# deliberation before producing the first content token, especially on
+# short prompts where the reasoning overhead dominates. Surfaced in the
+# picker so users can pick informed and not mistake reasoning latency
+# for a hung session. Heuristic: also tag any upstream ID whose name
+# contains the substring "reasoning" or "thinking".
+REASONING_MODEL_IDS: frozenset = frozenset({
+    "deepseek-ai/deepseek-v4-pro",
+    "nvidia/llama-3.1-nemotron-ultra-253b-v1",
+})
+
+
+def is_reasoning_model(upstream_id: str) -> bool:
+    if upstream_id in REASONING_MODEL_IDS:
+        return True
+    lowered = upstream_id.lower()
+    return "reasoning" in lowered or "thinking" in lowered
+
 
 @dataclass(frozen=True)
 class NIMModelRecord:
@@ -234,6 +253,8 @@ def record_for_upstream(
     tag_set = tuple(dict.fromkeys(tags))
     if upstream_id == DEFAULT_MODEL:
         tag_set = tuple(dict.fromkeys(("default", "kimi-k2.6", "256k-context", *tag_set)))
+    if is_reasoning_model(upstream_id):
+        tag_set = tuple(dict.fromkeys(("reasoning", *tag_set)))
     return NIMModelRecord(
         upstream_id=upstream_id,
         alias=alias_for_model(upstream_id, public_default),

@@ -25,6 +25,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from proxy.nim_api_sonar import (
+    is_reasoning_model,
     normalize_requested_model_alias,
     openai_models_payload,
     resolve_model_alias,
@@ -52,6 +53,15 @@ class NIMSettings:
     preflight_timeout_s: float = 5.0
     stream_header_timeout_s: float = 180.0
     stream_ping_interval_s: float = 5.0
+    # First-token timeout: the maximum time the streaming endpoint waits
+    # for the first content token from upstream before aborting and
+    # returning a clear notice inside Claude Code. Default 90s for
+    # standard models; reasoning models default to 300s because internal
+    # chain-of-thought commonly extends the pre-first-token window.
+    # Override via PULSAR_NIM_FIRST_TOKEN_TIMEOUT and
+    # PULSAR_NIM_FIRST_TOKEN_TIMEOUT_REASONING.
+    first_token_timeout_s: float = 90.0
+    first_token_timeout_reasoning_s: float = 300.0
 
     @property
     def chat_url(self) -> str:
@@ -377,6 +387,48 @@ def nim_issue_notice_text(settings: NIMSettings, status_code: int, detail: str =
 
 def rate_limit_notice_text(settings: NIMSettings) -> str:
     return nim_issue_notice_text(settings, 429)
+
+
+def first_token_timeout_notice_text(
+    settings: NIMSettings,
+    upstream_model_id: str,
+    timeout_s: float,
+    is_reasoning: bool,
+) -> str:
+    if is_reasoning:
+        return (
+            f"NVIDIA NIM upstream model {upstream_model_id} did not produce "
+            f"a first token within {int(timeout_s)} seconds.\n\n"
+            "This is a reasoning model. Reasoning models do internal "
+            "chain-of-thought before any visible content; short prompts can "
+            "trigger long deliberation, occasionally beyond five minutes.\n\n"
+            "To switch to a non-reasoning model:\n"
+            "  1. End this Claude Code session ( Ctrl+D or `/exit` ).\n"
+            "  2. In a fresh terminal tab, run `pulsarcode pick` and choose a\n"
+            "     model without the `reasoning` tag (suggestions: nim-kimi,\n"
+            "     nim-deepseek-ai-deepseek-v4-flash, nim-openai-gpt-oss-120b).\n"
+            "  3. Run `pulsarcode` again.\n\n"
+            "To extend the reasoning timeout, set\n"
+            "  PULSAR_NIM_FIRST_TOKEN_TIMEOUT_REASONING=<seconds>\n"
+            "before launching pulsarcode.\n"
+        )
+    return (
+        f"NVIDIA NIM upstream model {upstream_model_id} did not produce a "
+        f"first token within {int(timeout_s)} seconds.\n\n"
+        "This is unexpected for a non-reasoning model on a short prompt. "
+        "The upstream model may be overloaded, the account may be rate-"
+        "limited, or the route may have been temporarily delisted.\n\n"
+        "Recovery options:\n"
+        "  1. Wait briefly and retry the same prompt.\n"
+        "  2. Switch model: end this Claude Code session, run\n"
+        "     `pulsarcode pick` in a fresh terminal tab, choose a different\n"
+        "     alias ( nim-kimi is the default and most stable ), then run\n"
+        "     `pulsarcode` again.\n"
+        "  3. Check NVIDIA's status page at https://status.nvidia.com/.\n\n"
+        "To extend the first-token timeout, set\n"
+        "  PULSAR_NIM_FIRST_TOKEN_TIMEOUT=<seconds>\n"
+        "before launching pulsarcode.\n"
+    )
 
 
 def anthropic_text_message(
@@ -737,9 +789,60 @@ async def anthropic_stream_from_nim(
 
     assert client is not None
     assert response is not None
+
+    # First-token timeout. If the upstream model produces no content
+    # within `timeout_s` seconds of stream-open, abort the upstream
+    # request and yield a clear actionable notice inside Claude Code
+    # rather than letting the session hang. Reasoning models get the
+    # longer reasoning-specific timeout because internal deliberation
+    # routinely extends the pre-first-token window.
+    upstream_model_id = build_openai_body(body, settings, stream=True)["model"]
+    is_reasoning = is_reasoning_model(str(upstream_model_id))
+    first_token_timeout_s = (
+        settings.first_token_timeout_reasoning_s
+        if is_reasoning
+        else settings.first_token_timeout_s
+    )
+
+    line_queue: "asyncio.Queue[Optional[str]]" = asyncio.Queue()
+
+    async def _drain_lines() -> None:
+        try:
+            async for raw in response.aiter_lines():
+                await line_queue.put(raw)
+        except Exception:
+            pass
+        finally:
+            await line_queue.put(None)
+
+    drain_task = asyncio.create_task(_drain_lines())
+    first_token_seen = False
+    started_at = time.time()
+    timeout_fired = False
     try:
-        async for raw in response.aiter_lines():
-            if not raw or not raw.startswith("data:"):
+        while True:
+            if not first_token_seen:
+                elapsed = time.time() - started_at
+                remaining = first_token_timeout_s - elapsed
+                if remaining <= 0:
+                    timeout_fired = True
+                    break
+                wait_s = min(remaining, ping_interval)
+            else:
+                wait_s = None  # no per-line timeout once stream is producing
+            try:
+                if wait_s is None:
+                    raw = await line_queue.get()
+                else:
+                    raw = await asyncio.wait_for(line_queue.get(), timeout=wait_s)
+            except asyncio.TimeoutError:
+                if not first_token_seen:
+                    yield _sse("ping", {"type": "ping"})
+                    continue
+                raw = None
+            if raw is None:
+                break
+            if not raw.startswith("data:"):
                 continue
             data_str = raw[5:].strip()
             if data_str == "[DONE]":
@@ -757,6 +860,7 @@ async def anthropic_stream_from_nim(
                 delta = choice.get("delta") or {}
                 text = delta.get("content")
                 if text:
+                    first_token_seen = True
                     output_tokens += 1
                     yield _sse("content_block_delta", {
                         "type": "content_block_delta",
@@ -778,8 +882,29 @@ async def anthropic_stream_from_nim(
                     if fn.get("arguments"):
                         current["arguments"] += str(fn["arguments"])
     finally:
-        await response.aclose()
-        await client.aclose()
+        drain_task.cancel()
+        try:
+            await response.aclose()
+        except Exception:
+            pass
+        try:
+            await client.aclose()
+        except Exception:
+            pass
+
+    if timeout_fired:
+        notice = first_token_timeout_notice_text(
+            settings,
+            str(upstream_model_id),
+            first_token_timeout_s,
+            is_reasoning,
+        )
+        output_tokens = max(1, len(notice.split()))
+        yield _sse("content_block_delta", {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {"type": "text_delta", "text": notice},
+        })
 
     yield _sse("content_block_stop", {"type": "content_block_stop", "index": 0})
 
@@ -834,6 +959,8 @@ def make_app(settings: Optional[NIMSettings] = None) -> FastAPI:
             preflight_timeout_s=float(os.environ.get("PULSAR_NIM_PREFLIGHT_TIMEOUT", "5")),
             stream_header_timeout_s=float(os.environ.get("PULSAR_NIM_STREAM_HEADER_TIMEOUT", "180")),
             stream_ping_interval_s=float(os.environ.get("PULSAR_NIM_STREAM_PING_INTERVAL", "5")),
+            first_token_timeout_s=float(os.environ.get("PULSAR_NIM_FIRST_TOKEN_TIMEOUT", "90")),
+            first_token_timeout_reasoning_s=float(os.environ.get("PULSAR_NIM_FIRST_TOKEN_TIMEOUT_REASONING", "300")),
         )
 
     app = FastAPI(title="pulsarcode NVIDIA NIM Anthropic adapter", version="0.1")
@@ -972,6 +1099,8 @@ def main() -> None:
         preflight_timeout_s=float(os.environ.get("PULSAR_NIM_PREFLIGHT_TIMEOUT", "5")),
         stream_header_timeout_s=float(os.environ.get("PULSAR_NIM_STREAM_HEADER_TIMEOUT", "180")),
         stream_ping_interval_s=float(os.environ.get("PULSAR_NIM_STREAM_PING_INTERVAL", "5")),
+        first_token_timeout_s=float(os.environ.get("PULSAR_NIM_FIRST_TOKEN_TIMEOUT", "90")),
+        first_token_timeout_reasoning_s=float(os.environ.get("PULSAR_NIM_FIRST_TOKEN_TIMEOUT_REASONING", "300")),
     )
     uvicorn.run(make_app(settings), host=args.host, port=args.port, log_level="warning")
 
