@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 PulsarOS Intelligence Inc.
-"""PulsarOS API Sonar for public NVIDIA NIM model discovery.
+"""pulsarcode API Sonar: NVIDIA NIM model catalog discovery.
 
-The scanner merges official NVIDIA reference pages, NVIDIA build pages,
-optional operator-provided public URLs, and the authenticated /v1/models
-endpoint when available. It never probes private networks or guesses
-unauthorized endpoints.
+Merges three sources into a single deduplicated catalog:
+  1. A curated static seed of upstream model IDs known to be live on
+     NVIDIA NIM at release time.
+  2. Public NVIDIA reference and build pages, parsed for model IDs.
+  3. The authenticated /v1/models endpoint when an API key is provided.
+
+Reads only HTTPS public URLs and the configured NVIDIA NIM endpoint.
+Never probes private networks or guesses unauthorized routes.
 """
 
 from __future__ import annotations
@@ -40,65 +44,66 @@ OFFICIAL_SOURCES: Tuple[Tuple[str, str], ...] = (
     ("nvidia-kimi-k2-6-reference", "https://docs.api.nvidia.com/nim/reference/moonshotai-kimi-k2-6"),
 )
 
+# Curated seed of upstream NVIDIA NIM model IDs known to be live on
+# `integrate.api.nvidia.com/v1/models` at release time. The runtime
+# discovery layer merges this seed with the public-source crawler and
+# the authenticated `/v1/models` endpoint, so the working catalog stays
+# current between pulsarcode releases.
 STATIC_OFFICIAL_MODELS: Tuple[str, ...] = (
     "moonshotai/kimi-k2.6",
-    # v1.0.8: kimi-k2-thinking and kimi-k2-instruct removed. NVIDIA NIM no
-    # longer hosts these; the live /v1/models endpoint does not return
-    # them, and the chat completions endpoint replies with HTTP 410 Gone
-    # for any request that names them. Their static seed in this catalog
-    # caused the picker to advertise dead routes.
     "abacusai/dracarys-llama-3.1-70b-instruct",
     "bytedance/seed-oss-36b-instruct",
+    "deepseek-ai/deepseek-coder-6.7b-instruct",
     "deepseek-ai/deepseek-v4-flash",
     "deepseek-ai/deepseek-v4-pro",
     "google/codegemma-7b",
     "google/gemma-2-2b-it",
-    "google/gemma-7b",
+    "google/gemma-3-4b-it",
+    "google/gemma-3-12b-it",
+    "google/gemma-4-31b-it",
+    "meta/codellama-70b",
     "meta/llama2-70b",
     "meta/llama-3.1-8b-instruct",
     "meta/llama-3.1-70b-instruct",
     "meta/llama-3.2-1b-instruct",
     "meta/llama-3.2-3b-instruct",
     "meta/llama-3.3-70b-instruct",
+    "meta/llama-4-maverick-17b-128e-instruct",
     "microsoft/phi-4-mini-instruct",
-    "microsoft/phi-4-mini-flash-reasoning",
-    "minimaxai/minimax-m2.5",
+    "microsoft/phi-4-multimodal-instruct",
     "minimaxai/minimax-m2.7",
-    "mistralai/magistral-small-2506",
+    "mistralai/codestral-22b-instruct-v0.1",
     "mistralai/mistral-7b-instruct-v0.3",
+    "mistralai/mistral-large-3-675b-instruct-2512",
+    "mistralai/mistral-medium-3.5-128b",
     "mistralai/mistral-nemotron",
-    "mistralai/mixtral-8x22b-instruct",
-    "mistralai/mixtral-8x7b-instruct",
+    "mistralai/mistral-small-4-119b-2603",
+    "mistralai/mixtral-8x22b-v0.1",
+    "mistralai/mixtral-8x7b-instruct-v0.1",
+    "nv-mistralai/mistral-nemo-12b-instruct",
     "nvidia/gliner-pii",
     "nvidia/llama-3.1-nemoguard-8b-content-safety",
     "nvidia/llama-3.1-nemoguard-8b-topic-control",
     "nvidia/llama-3.1-nemotron-nano-8b-v1",
+    "nvidia/llama-3.1-nemotron-ultra-253b-v1",
     "nvidia/llama-3.3-nemotron-super-49b-v1",
     "nvidia/llama-3.3-nemotron-super-49b-v1.5",
-    "nvidia/llama-3.1-nemotron-ultra-253b-v1",
-    "nvidia/nemoguard-jailbreak-detect",
     "nvidia/nemotron-3-nano-30b-a3b",
     "nvidia/nemotron-3-super-120b-a12b",
     "nvidia/nemotron-content-safety-reasoning-4b",
     "nvidia/nemotron-mini-4b-instruct",
     "nvidia/nvidia-nemotron-nano-9b-v2",
-    "nvidia/riva-translate-4b-instruct-v1_1",
-    "nvidia/usdcode",
     "openai/gpt-oss-20b",
     "openai/gpt-oss-120b",
-    "qwen/qwen2.5-coder-7b-instruct",
-    "qwen/qwen2.5-coder-32b-instruct",
-    "qwen/qwen3-5-122b-a10b",
     "qwen/qwen3-coder-480b-a35b-instruct",
     "qwen/qwen3-next-80b-a3b-instruct",
-    "qwen/qwen3-next-80b-a3b-thinking",
-    "qwen/qwq-32b",
+    "qwen/qwen3.5-122b-a10b",
+    "qwen/qwen3.5-397b-a17b",
     "sarvamai/sarvam-m",
-    "stepfun-ai/step-3-5-flash",
+    "stepfun-ai/step-3.5-flash",
     "stockmark/stockmark-2-100b-instruct",
     "upstage/solar-10.7b-instruct",
-    "z-ai/glm4.7",
-    "z-ai/glm5.1",
+    "z-ai/glm-5.1",
 )
 
 STATIC_OFFICIAL_MODEL_SET = set(STATIC_OFFICIAL_MODELS)
@@ -193,8 +198,6 @@ def claude_code_selector_alias_for_model(
 def display_name_for_record(record: NIMModelRecord, selector: bool = False) -> str:
     if record.upstream_id == DEFAULT_MODEL:
         return "Pulsar Kimi K2.6"
-    if record.model == "kimi-k2-thinking":
-        return "Pulsar Kimi K2 Thinking"
     words = re.split(r"[-_.]+", record.model)
     title = " ".join(part.upper() if len(part) <= 3 else part.capitalize() for part in words if part)
     provider = record.provider.replace("-", " ").replace("_", " ").title()

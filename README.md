@@ -48,20 +48,20 @@ $ pulsarcode
 +----------------------------------------------------------------------------+
 
   RECENTLY USED  your previous selections, newest first
-  >  [x]  nim-kimi                      moonshotai/kimi-k2.6
-     [ ]  nim-deepseek-v4-pro           deepseek-ai/deepseek-v4-pro
-     [ ]  nim-qwen-qwen3-coder-480b     qwen/qwen3-coder-480b
+  >  [x]  nim-kimi                                   moonshotai/kimi-k2.6
+     [ ]  nim-deepseek-ai-deepseek-v4-pro            deepseek-ai/deepseek-v4-pro
+     [ ]  nim-qwen-qwen3-coder-480b-a35b-instruct    qwen/qwen3-coder-480b-a35b-instruct
 
   CODING TIER  largest coding-tuned routes
-     [ ]  nim-kimi-k2-thinking          moonshotai/kimi-k2-thinking
-     [ ]  nim-kimi-k2-instruct          moonshotai/kimi-k2-instruct
-     [ ]  nim-openai-gpt-oss-120b       openai/gpt-oss-120b
+     [ ]  nim-openai-gpt-oss-120b                    openai/gpt-oss-120b
+     [ ]  nim-mistralai-codestral-22b-instruct-v0-1  mistralai/codestral-22b-instruct-v0.1
+     [ ]  nim-meta-codellama-70b                     meta/codellama-70b
 
   GENERAL TIER  mid to large general-purpose routes
-     [ ]  nim-meta-llama-3-3-70b-instruct
-     [ ]  nim-z-ai-glm5-1
-     [ ]  nim-minimaxai-minimax-m2-7
-     (8 more below)
+     [ ]  nim-meta-llama-3-3-70b-instruct            meta/llama-3.3-70b-instruct
+     [ ]  nim-z-ai-glm-5-1                           z-ai/glm-5.1
+     [ ]  nim-minimaxai-minimax-m2-7                 minimaxai/minimax-m2.7
+     (a few more below)
 ```
 
 Hit Enter on what you want, code. The wizard runs on every launch; Esc on
@@ -106,9 +106,9 @@ default. A `.zip` release asset is published too for users who prefer it.
 Claude Code is one of the most polished coding-agent CLIs available in
 2026. The CLI binary itself is a free download from
 [claude.com/claude-code](https://claude.com/claude-code). The Claude
-models behind it are accessed through a paid subscription (the Anthropic
-Claude Pro plan that includes Claude Code access lists at **$20 USD per
-month** as of v1.0.0 release).
+models behind it are accessed through a paid Anthropic subscription
+(the Claude Pro plan that includes Claude Code access lists at **$20 USD
+per month**).
 
 For developers in high-income countries that is friction; for developers
 in Argentina, Vietnam, Nigeria, Tunisia, India, Indonesia, Egypt,
@@ -171,7 +171,7 @@ behind it. pulsarcode adds:
 | Subscription required | Yes for Claude family | No (free NIM developer tier) |
 | Models selectable from one config | Claude family | 55+ via NIM, including Kimi K2.6 |
 | First-launch wizard for backend setup | API key paste only | NIM signup walk-through + arrow-key model picker |
-| Live model picker grouped by tier | n/a | Yes, 55+ routes grouped CODING / GENERAL / LIGHTWEIGHT |
+| Live model picker grouped by tier | n/a | Yes, 55+ routes grouped CODING / GENERAL / LIGHTWEIGHT / OTHER |
 | Persistent model choice across shells | n/a | Yes, sticky via `/model <alias>` or `pulsarcode pick` |
 | Local adapter source code | n/a | AGPL-3.0, ~1000 lines of Python, auditable |
 | Project license | Proprietary EULA | AGPL-3.0 (this launcher) |
@@ -318,12 +318,13 @@ em-dash-leak assertion on the rendered picker output.
 +---------------------------------------+
          |                  |
          |                  v
-         |     +------------------------+
-         |     | claude (Claude Code)   |
-         |     | (official Anthropic    |
-         |     |  binary, you install   |
-         |     |  separately)           |
-         |     +------------------------+
+         |     +------------------------------+
+         |     | claude (Claude Code)         |
+         |     | (official Anthropic binary;  |
+         |     |  the installer auto-pulls it |
+         |     |  via `npm i -g @anthropic-ai |
+         |     |  /claude-code` if missing)   |
+         |     +------------------------------+
          |                  |
          |   Anthropic Messages API
          |   (public wire format)
@@ -349,10 +350,12 @@ em-dash-leak assertion on the rendered picker output.
 +--------------------------------------------+
 ```
 
-The local adapter is about a thousand lines of Python with zero non-stdlib
-dependencies beyond `httpx`, `fastapi`, `uvicorn`, and `sse-starlette`.
-The full stack (launcher + 3 proxy modules + tests) is roughly 4000 to
-5000 lines. Readable in one sitting. Auditable in one afternoon.
+The local adapter is about a thousand lines of Python with three
+non-stdlib dependencies: `httpx` (HTTPS client to NVIDIA), `fastapi`
+(HTTP routing), and `uvicorn` (ASGI server). Streaming uses FastAPI's
+own `StreamingResponse`; no extra SSE library. The full stack
+(launcher + 3 proxy modules + tests) is roughly 4000 to 5000 lines.
+Readable in one sitting. Auditable in one afternoon.
 
 ---
 
@@ -446,7 +449,7 @@ The installer creates this layout under your home directory:
     tests/               the 21-test smoke suite
     requirements.txt
   venv/                  isolated Python virtualenv (no system pip pollution)
-  nim.key                your NVIDIA NIM key (chmod 600, never leaves this Mac)
+  nim.key                your NVIDIA NIM key (chmod 600, never leaves this machine)
   active_model           last alias selected via /model or pulsarcode pick
   model_history          your recently-used picks, newest first, capped at 20
   claude_config/         isolated Claude Code profile (no leak to ~/.claude)

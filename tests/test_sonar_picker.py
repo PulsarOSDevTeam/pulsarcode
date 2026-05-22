@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (C) 2026 PulsarOS Intelligence Inc. / Collapse Technologies Inc.
+# Copyright (C) 2026 PulsarOS Intelligence Inc.
 """Unit tests for proxy.nim_sonar_picker.
 
 Covers tier classification, group ordering, persistence round-trip, and
@@ -8,8 +8,6 @@ the render shape. No raw TTY exercise (pytest does not own a tty).
 
 from __future__ import annotations
 
-import os
-import tempfile
 from pathlib import Path
 
 import pytest

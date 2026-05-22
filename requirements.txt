@@ -1,21 +1,7 @@
-# PulsarCode Team Distribution - Python Dependencies
-# Minimum versions for stability and security
+# pulsarcode runtime dependencies.
+# Minimum-version pins for stability; upper bounds keep major-version
+# breakage out of the supported install path.
 
-# Core
-numpy>=2.0,<3.0
-zstandard>=0.22,<1.0
-
-# Web framework
 fastapi>=0.115,<1.0
 uvicorn[standard]>=0.34,<1.0
-sse-starlette>=2.0,<3.0
-
-# HTTP client
 httpx>=0.28,<1.0
-
-# Optional: MLX for local inference (macOS only)
-# mlx>=0.24; sys_platform == "darwin"
-# mlx-lm>=0.31; sys_platform == "darwin"
-
-# Utilities
-pydantic>=2.10,<3.0

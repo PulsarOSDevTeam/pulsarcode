@@ -40,17 +40,16 @@ The following are out of scope for this repository's security policy:
 
 ## What we consider a security issue here
 
-- Unauthorized exfiltration of the operator's NVIDIA NIM key from
+- Unauthorized exfiltration of a user's NVIDIA NIM key from
   `~/.pulsarcode/nim.key`.
 - Adapter binding to a non-loopback interface.
 - Outbound network traffic to any host other than `integrate.api.nvidia.com`
-  (or whatever the operator explicitly configured via
+  (or whatever the user explicitly configured via
   `NVIDIA_NIM_API_BASE`).
 - Command injection in the launcher or the adapter.
 - Path traversal in the installer.
 - Privilege escalation through the symlinks the installer creates.
-- Any leakage of operator prompt content to a third party other than
-  NVIDIA NIM.
+- Any leakage of prompt content to a third party other than NVIDIA NIM.
 
 ## What we do not consider a security issue
 
@@ -63,13 +62,13 @@ The following are out of scope for this repository's security policy:
   a vulnerability.
 - The fact that the launcher writes the NIM key to disk at
   `~/.pulsarcode/nim.key` mode 0600. We chose disk-stored over
-  environment-variable so the operator can run multiple terminal
-  sessions without re-pasting; if you want stricter handling, fork
-  and modify your fork.
+  environment-variable so users can run multiple terminal sessions
+  without re-pasting; if you want stricter handling, fork and modify
+  your fork.
 
 ## Hall of fame
 
-We will list responsible reporters here, by name (with permission) or
-anonymously, after each fixed vulnerability ships.
-
-(Empty for now. v1.0.0 is the first public release.)
+We list responsible reporters here, by name (with permission) or
+anonymously, after each fixed vulnerability ships. The list is empty
+today; once a reported vulnerability lands a fix, the reporter's entry
+appears here.

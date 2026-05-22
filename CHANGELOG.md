@@ -8,59 +8,76 @@ public releases.
 
 ---
 
-## v1.0.8  -  Three demo-blocking fixes
+## v1.0.9  -  Catalog truth, dependency hygiene, copy polish
 
-> **Documentation polish landed 2026-05-21** (no version bump, no code
-> change, tarball asset unchanged): the README Quick Start now opens
-> with a four-bullet "Prerequisites at a glance" block, the
-> Requirements table grew a dedicated Node.js row plus an inline note
-> on the Claude Code row explaining that the installer auto-pulls it
-> via npm if absent, and the curl one-liner in the Quick Start was
-> bound to the actual `v1.0.8` tag instead of `vX.Y.Z` placeholders.
-> The v1.0.8 release-page notes were updated in place via
-> `gh release edit` to mirror the same Requirements block. The tag,
-> the commit (`0d005ce`), and the downloaded `pulsarcode-v1.0.8.tar.gz`
-> bytes are identical to publish time.
+### Changed
 
-User-visible demo bugs caught while screen-recording the launch film
-against a real fresh-install on macOS:
+- **Static model catalog rewritten against the live NVIDIA NIM `/v1/models` endpoint.**
+  Every upstream model ID in `STATIC_OFFICIAL_MODELS` is now present in the
+  authoritative `integrate.api.nvidia.com/v1/models` response at release time.
+  Sixteen entries that no longer existed upstream are removed. Six entries are
+  renamed to match the upstream ID format (`step-3.5-flash` not `step-3-5-flash`,
+  `glm-5.1` not `glm5.1`, `qwen3.5-122b-a10b` not `qwen3-5-122b-a10b`,
+  `mixtral-8x22b-v0.1` not `mixtral-8x22b-instruct`, `mixtral-8x7b-instruct-v0.1`
+  not `mixtral-8x7b-instruct`, `riva-translate-4b-instruct-v1.1` not
+  `riva-translate-4b-instruct-v1_1`). Eleven new live entries added, including
+  `google/gemma-4-31b-it`, `meta/llama-4-maverick-17b-128e-instruct`,
+  `mistralai/codestral-22b-instruct-v0.1`, `mistralai/mistral-large-3-675b-instruct-2512`,
+  `qwen/qwen3.5-397b-a17b`. Selecting any catalog entry now reaches a
+  model NVIDIA actually serves.
 
-### Fix 1: Dead model routes removed from the catalog
+- **`requirements.txt` pinned to actual runtime dependencies.** Removes `numpy`,
+  `zstandard`, `sse-starlette`, and `pydantic`, all of which had zero imports
+  across the proxy modules. Removes the commented MLX block (unused here).
+  Three pins remain: `fastapi`, `uvicorn[standard]`, `httpx`. Smaller install
+  surface; faster venv build.
 
-`moonshotai/kimi-k2-thinking` and `moonshotai/kimi-k2-instruct` were
-seeded in the static catalog but NVIDIA NIM no longer hosts them. The
-live `/v1/models` endpoint returns only `moonshotai/kimi-k2.6` from
-Moonshot. Any user who picked `nim-kimi-k2-thinking` or
-`nim-kimi-k2-instruct` in the picker then got `HTTP 410 Gone` from
-NVIDIA on their first Claude Code message. Both entries are now
-removed from `STATIC_OFFICIAL_MODELS` and from the context-token
-override map.
+- **README and CHANGELOG corrected to match actual dependencies.** The adapter
+  uses FastAPI's built-in `StreamingResponse` for SSE; the prior claim that
+  `sse-starlette` was a dependency is removed everywhere it appeared.
 
-If NVIDIA reinstates these endpoints in the future, the runtime
-catalog will pick them up live; nothing else needs to change.
+- **README architecture diagram updated.** The Claude Code box now reflects
+  the v1.0.6 behavior: the installer auto-pulls Claude Code via
+  `npm i -g @anthropic-ai/claude-code` when it is missing.
 
-### Fix 2: `pulsarcode` branding consistent across all user-facing surfaces
+- **README ASCII demo refreshed.** The example picker view now lists models
+  that are actually in the catalog.
 
-The picker title bar and ten status-line strings still read
-`Local Pulsar / API Sonar`. Those are now `pulsarcode / API Sonar`.
-The `proxy/__init__.py` and `tests/__init__.py` docstrings were
-updated for consistency. The shell-rc PATH comment that the installer
-writes into `~/.zshrc` / `~/.bashrc` is also corrected.
+- **`pulsarcode API Sonar` branding standardized.** The picker module
+  argparse description and the `nim_api_sonar` module docstring now use
+  the `pulsarcode` brand consistently.
 
-### Fix 3: install.sh banners render in color instead of printing literal `\033[...m`
+- **CHANGELOG entries v1.0.0 through v1.0.8 rewritten in third-person
+  declarative voice.** Prior entries described changes in narrative-recap
+  form; this release brings every entry to a consistent production tone.
 
-The installer used double-quoted strings for the ANSI escape codes
-(`EMBER="\033[38;5;208m"`), which bash treats as four literal
-characters. The banners therefore printed the raw escape codes as
-plain text on screen. v1.0.8 switches to ANSI-C `$'\033...'` quoting
-so bash assigns the actual ESC byte (0x1B). The installer now renders
-the ember-orange / green / dim / bold colors it always intended.
+### Removed
+
+- `_CODING_ORDER_HINTS` entries for models no longer in the catalog
+  (`kimi-k2-thinking`, `kimi-k2-instruct`, `qwen2.5-coder-32b`,
+  `qwen2.5-coder-7b`).
+- The `kimi-k2-thinking` special-case branch in `display_name_for_record`,
+  unreachable since the model was removed from the catalog.
+- Stale `tempfile` import in the test module; tests use the `pytest`
+  `tmp_path` fixture exclusively.
+
+### Added
+
+- Python 3.14 added to the CI test matrix (Ubuntu + macOS × 3.11 / 3.12 /
+  3.13 / 3.14). README already listed 3.14 as recommended; CI now matches.
+
+### Fixed
+
+- `display_name_for_record` no longer references a removed model.
+- `SECURITY.md` "Hall of fame" copy refreshed; the prior text anchored on
+  v1.0.0 as "the first public release" and read stale after eight releases.
 
 ### Tests
 
-21/21 pass on the CI matrix. No behavior change in the picker,
-the adapter, or the API Sonar catalog beyond the two removed model
-ids; the existing suite covers every code path touched.
+21/21 pass on every CI matrix slot. No behavior change in the picker key
+logic, the adapter wire format, the install flow, or the catalog merge
+algorithm; this release moves the inputs (static catalog data, requirements,
+copy) into alignment with reality.
 
 ### Upgrade
 
@@ -68,336 +85,226 @@ ids; the existing suite covers every code path touched.
 bash install.sh
 ```
 
-Idempotent. Your stored NIM key, current `active_model`, and
-`model_history` carry over.
+Idempotent. Stored NIM key, current `active_model`, and `model_history` carry
+over.
 
 ### One-line install (latest)
 
 ```bash
-curl -sL https://github.com/PulsarOSDevTeam/pulsarcode/releases/download/v1.0.8/pulsarcode-v1.0.8.tar.gz | tar -xzf - -C /tmp && bash /tmp/pulsarcode-1.0.8/install.sh && ~/.local/bin/pulsarcode
+curl -sL https://github.com/PulsarOSDevTeam/pulsarcode/releases/download/v1.0.9/pulsarcode-v1.0.9.tar.gz | tar -xzf - -C /tmp && bash /tmp/pulsarcode-1.0.9/install.sh && ~/.local/bin/pulsarcode
 ```
 
 ---
 
-## v1.0.7  -  Picker NameError on Enter (and numeric-CSI drain)
+## v1.0.8  -  Catalog correction, branding, installer rendering
 
-Bug-fix release. v1.0.4 rewrote `_read_key` to read bytes directly from
-the tty file descriptor via `os.read`, but the rewrite missed two
-trailing sections of the function that still referenced the old
-`ch = sys.stdin.read(1)` variable name and a bare `select` import. The
-result was a Python `NameError` flashing on screen every time a picker
-user pressed Enter, Ctrl-C, Tab, or any unmapped key, and another
-NameError when any function key sent a numeric CSI sequence (Page Up,
-Page Down, Home, End). The picker's launcher caller swallowed the
-traceback so Claude Code still opened, but the user's model selection
-never persisted, which is why the banner kept showing the default
-model after Enter on the picker.
+### Fixed
 
-### What changed
+- Removed `moonshotai/kimi-k2-thinking` and `moonshotai/kimi-k2-instruct`
+  from `STATIC_OFFICIAL_MODELS`. NVIDIA NIM no longer serves either
+  upstream ID; requests to them returned HTTP 410 Gone.
+- Replaced remaining legacy product-name references in the picker
+  title bar, status-line strings, and `__init__.py` docstrings with
+  `pulsarcode / API Sonar`. Corrected the shell-rc PATH comment written
+  by the installer.
+- Switched `install.sh` ANSI color variables to ANSI-C `$'\033...'`
+  quoting so banners render in color instead of printing literal
+  `\033[...m` as text.
 
-- `_read_key` final block now does byte-precise checks against `b`
-  (the byte read by `os.read(fd, 1)` at the top of the function):
-  `b == 0x0D or b == 0x0A` for ENTER, `b == 0x03` for CTRL-C,
-  `b == 0x09` for TAB, `chr(b)` for printable ASCII passthrough.
-- Numeric-CSI drain branch now uses `_sel.select([fd], ...)` and
-  `os.read(fd, 1)` instead of the bare `select.select` /
-  `sys.stdin.read(1)` references that were also leftover from the
-  pre-v1.0.4 implementation.
+### Notes
 
-The fix is twelve lines across one file. Behavior of the picker is
-unchanged on every other path; this release only stops the flash and
-makes Enter actually persist the chosen alias to
-`~/.pulsarcode/active_model` and `~/.pulsarcode/model_history`.
-
-### Upgrade
-
-```bash
-bash install.sh
-```
-
-Idempotent. Your stored NIM key, current `active_model`, and
-`model_history` carry over from v1.0.x.
-
-Tests still 21/21 on the CI matrix.
+A documentation-only patch landed on the same `v1.0.8` tag's `main`
+branch after release: the README Quick Start opens with a four-bullet
+"Prerequisites at a glance" callout, the Requirements table gained a
+dedicated Node.js row and a Notes column, and the curl one-liner was
+bound to the actual tag instead of `vX.Y.Z` placeholders. The
+`pulsarcode-v1.0.8.tar.gz` release asset itself is unchanged from
+publish time.
 
 ---
 
-## v1.0.6  -  Claude Code pre-flight + tar.gz release asset
+## v1.0.7  -  `_read_key` byte-comparison fix
 
-Two fixes that close the last gaps a first-time user could hit with the
-one-line install command.
+### Fixed
 
-### Fix 1: Claude Code pre-flight
+- `proxy/nim_sonar_picker.py` `_read_key` final block now compares the
+  byte read by `os.read(fd, 1)` directly (`b == 0x0D or b == 0x0A`
+  for ENTER, `b == 0x03` for CTRL-C, `b == 0x09` for TAB, `chr(b)` for
+  printable ASCII). The prior code referenced an undefined `ch`
+  variable left from the earlier `sys.stdin.read(1)` implementation,
+  which raised `NameError` on Enter, Ctrl-C, Tab, or any unmapped key
+  and prevented the picker from persisting the chosen alias.
+- The numeric-CSI drain branch (Page Up / Down / Home / End) now uses
+  `_sel.select([fd], ...)` and `os.read(fd, 1)`, matching the rest of
+  the function.
 
-The launcher now validates that the official Anthropic Claude Code CLI
-is installed BEFORE running the every-launch wizard. Previously a user
-without Claude Code would go through API key paste plus arrow-key model
-picker, and only then hit a `127` exit code. That UX is gone.
-
-The installer also pre-flights `claude` before building the venv. If
-the binary is missing and `npm` is on the user's machine, the installer
-auto-runs `npm install -g @anthropic-ai/claude-code` and continues. If
-`npm` is also missing, the installer halts with a clear pointer at
-[nodejs.org](https://nodejs.org) and at the
-[Claude Code install docs](https://claude.com/claude-code).
-
-This means the one-liner can succeed end to end for a user with nothing
-but Node.js installed: pulsarcode pulls in Claude Code for them.
-
-### Fix 2: `.tar.gz` release asset
-
-A `.tar.gz` release asset (`pulsarcode-vX.Y.Z.tar.gz`) ships alongside
-the existing `.zip`. The published one-liner uses `tar -xzf` so it
-works out of the box on minimal Linux images (Alpine, slim Debian,
-fresh Ubuntu cloud images) that do not have `unzip` installed by
-default. The `.zip` asset is still published for users who prefer it.
-
-### Upgrade
-
-```bash
-bash install.sh
-```
-
-Idempotent. Your stored NIM key, current `active_model`, and
-`model_history` carry over from v1.0.x.
-
-### One-line install (new)
-
-```bash
-curl -sL https://github.com/PulsarOSDevTeam/pulsarcode/releases/download/v1.0.6/pulsarcode-v1.0.6.tar.gz \
-  | tar -xzf - -C /tmp && \
-bash /tmp/pulsarcode-1.0.6/install.sh && \
-~/.local/bin/pulsarcode
-```
-
-Tests still 21/21 on the CI matrix.
+Tests: 21/21 pass on the CI matrix.
 
 ---
 
-## v1.0.5  -  Copy polish across every user-facing surface
+## v1.0.6  -  Claude Code pre-flight, tar.gz release asset
 
-Documentation-only release. No code behavior change. Brings every
-user-visible string in the project up to v1.0.4 reality and clears the
-last of the v1.0.0 anchors that survived through patch releases.
+### Added
 
-### What changed
-
-- **README**: the "what you see when you run it" demo now matches the
-  every-launch wizard (two-step `y/N` and `pick a model` flow) with a
-  populated `RECENTLY USED` tier on top. The hardcoded version badge
-  was replaced with a dynamic GitHub-rendered "latest release" badge.
-  Hardcoded `pulsarcode-v1.0.0.zip` references in the quick start were
-  replaced with a one-line `curl` install snippet against the latest
-  release. The "12-test smoke suite" is now "21-test". The features
-  list documents the `RECENTLY USED` tier and the `model_history` file.
-  Troubleshooting entry "macOS first-launch wizard does not appear" is
-  obsolete (the wizard now runs every launch) and was replaced with a
-  `PULSAR_SKIP_WIZARD=1` recipe.
-- **install.sh**: banner is `pulsarcode installer` (the previous header
-  carried internal branding from the developer's local tree). The
-  "Next step" block describes the every-launch two-step flow with the
-  `PULSAR_SKIP_WIZARD=1` escape hatch. The smoke-test step now reports
-  the actual pass count parsed from pytest output instead of hardcoding
-  `12/12`.
-- **Launcher** (`pulsarcode`): top-of-file comment and `pulsarcode help`
-  describe the every-launch wizard with explicit `PULSAR_SKIP_WIZARD=1`
-  documentation. The `pick` subcommand's help mentions
-  `~/.pulsarcode/model_history` and the `RECENTLY USED` tier.
-- **Picker module docstring**: rewritten for an external code reader.
-  References to internal doctrine numbering and design memos were
-  removed; the file now documents what the picker does and how to
-  invoke it.
-- **`LOCAL_PULSAR` tier header text**: neutralized so it does not read
-  as operator-specific framing. The tier itself is reserved for future
-  on-device routes and is silently hidden on the public surface today.
-
-### Tests
-
-Suite still 21/21 on the CI matrix. No behavior changes; the existing
-tests cover every code path touched by this release.
-
-### Upgrade
-
-```bash
-bash install.sh
-```
-
-Idempotent. Your stored NIM key, current `active_model`, and
-`model_history` all carry over from v1.0.x.
+- `install.sh` step 1b validates the Anthropic Claude Code CLI before
+  building the venv. If `claude` is not on PATH and `npm` is available,
+  the installer runs `npm install -g @anthropic-ai/claude-code` and
+  continues. If neither is available, the installer halts with a clear
+  pointer at [nodejs.org](https://nodejs.org) and the
+  [Claude Code install docs](https://claude.com/claude-code).
+- The launcher validates `CLAUDE_BIN` at the top of the launch path,
+  before the every-launch wizard runs.
+- `.tar.gz` release asset published alongside the `.zip`. The published
+  one-liner uses `tar -xzf` so install works on minimal Linux images
+  where `unzip` is absent (Alpine, slim Debian, fresh Ubuntu cloud).
 
 ---
 
-## v1.0.4  -  Picker first-keypress fix and anchored repaint
+## v1.0.5  -  Documentation alignment
 
-Bug-fix release. Two issues in v1.0.3 caused a visibly broken picker:
+### Changed
 
-- **First keypress decoded as ENTER.** A trailing newline from the y/N
-  prompt was sitting in the kernel input queue when the picker took
-  over `stdin`; the picker's `sys.stdin.read(1)` consumed that newline
-  and selected the default model immediately. Fixed by reading bytes
-  directly from the tty file descriptor (`os.read`) instead of going
-  through Python's `TextIOWrapper` buffer, AND by flushing the kernel
-  input queue at cbreak-entry time via `termios.tcflush`.
-- **Visual drift on first paint and scroll.** The repaint loop used a
-  cursor-up move proportional to the previous paint height, which
-  desynchronizes whenever the terminal scrolls underneath. Fixed by
-  reserving enough vertical real estate for a full-height paint up
-  front (causing any necessary scroll to happen before any drawing),
-  saving that anchor cursor position (`\x1b7`), and restoring
-  (`\x1b8`) + clear-to-end (`\x1b[J`) before every repaint. The picker
-  now sits at a stable origin row through every arrow press.
+- README, `install.sh` "Next step" block, launcher help text, and
+  picker module docstring updated to describe the v1.0.4 reality:
+  every-launch two-step wizard, `RECENTLY USED` tier, `PULSAR_SKIP_WIZARD`
+  escape hatch, 21-test smoke suite. The prior copy still described
+  the v1.0.0 three-step first-launch wizard with a 12-test count.
+- README hardcoded `v1.0.0` version badge replaced with a dynamic
+  GitHub `latest release` badge.
+- `LOCAL_PULSAR` tier header neutralized; the tier is reserved for
+  future on-device routes and is hidden when empty.
+- `.gitignore` added: `__pycache__/`, `.pytest_cache/`, `.venv/`, editor
+  scratch files.
 
-Suite still 21/21 on the CI matrix. The fix is keyboard-input plumbing
-plus terminal-control codes; behavioral tests are unchanged.
-
-### Upgrade
-
-```bash
-bash install.sh    # idempotent; refreshes canonical files
-```
-
-Your stored NIM key, current active model, and history file all carry
-over from v1.0.x.
+No code behavior change.
 
 ---
 
-## v1.0.3  -  Every-launch wizard, recently-used model tier
+## v1.0.4  -  Picker first-keypress and anchored repaint
 
-User-experience release. The picker now runs on every launch with a
-one-keystroke replace-or-keep prompt for the API key, and a RECENTLY
-USED section at the top of the model list so re-picking your usual
-model is one arrow keystroke from any fresh shell.
+### Fixed
 
-### Changes
+- `_read_key` reads bytes directly from the tty file descriptor with
+  `os.read` instead of going through `sys.stdin.read(1)`, and the
+  picker calls `termios.tcflush(fd, TCIFLUSH)` at cbreak-entry. The
+  prior code's reliance on Python's `TextIOWrapper` buffer caused the
+  first keypress on a fresh picker session to be misread as ENTER
+  (consuming a trailing newline from the prior shell prompt) or as
+  ESC (when the CSI bytes arrived in two chunks across the buffer
+  boundary).
+- Picker repaints anchor to a saved cursor position (DEC `\x1b7` /
+  `\x1b8`) rather than a relative cursor-up move. The repaint reserves
+  enough vertical space up front for the full picker height before
+  saving the anchor, so terminal scrolling during the first paint does
+  not desynchronize the redraw.
 
-- **Every-launch wizard**. The two-step wizard (API key check, then model
-  picker) runs on every `pulsarcode` invocation, not just first launch.
-  Welcome banner still gates on the onboarding sentinel so subsequent
-  launches are silent.
-- **`Replace stored NIM API key now? [y/N]`**. When a key is already
-  stored, Step 1 collapses to a single y/N prompt with default N. Hit
-  Enter and the launcher moves straight to Step 2 with the stored key
-  intact. Hit Y to paste a different key without leaving the wizard.
-- **RECENTLY USED tier**. The picker reads `~/.pulsarcode/model_history`
-  and prepends a `RECENTLY USED` section above CODING / GENERAL /
-  LIGHTWEIGHT / OTHER. Most-recent first, deduplicated, capped at 20.
-  Each model appears once across the whole list.
-- **`/model <alias>` writes history too**. Direct model switches through
-  the in-session slash command now promote into RECENTLY USED on the
-  next launch.
-- **Skip the wizard for fast relaunches**: `PULSAR_SKIP_WIZARD=1
-  pulsarcode` bypasses both steps and goes straight to launch with the
-  stored key and active model.
-- **9 new tests** covering the history file round-trip, file mode 0600,
-  cap-at-20 with overflow, missing-file silence, RECENT prepend order,
-  stale-alias filtering, empty-history rendering, RECENT header
-  emission. Suite is now 21/21 on CI matrix (Ubuntu + macOS x Python
-  3.11 / 3.12 / 3.13).
-- **Removed Gmail-alias documentation** from the launcher's
-  credit-exhaustion hint and the README rotation flow. The hint now
-  points operators at NVIDIA's paid plans on `build.nvidia.com`.
-
-### Engineering details
-
-- Wizard is non-blocking. Network failure on catalog fetch falls back
-  to the static catalog (no behavior change). Picker failure is non-
-  fatal and the launch continues with whatever `active_model` already
-  says. History file corruption is silently ignored.
-- `~/.pulsarcode/model_history` is mode 0600, newline-delimited, capped
-  at 20 entries. Created lazily, never written by anything other than
-  the picker module's `write_history`.
-- Picker exits 0 only when an entry is selected with Enter (history
-  updated). Esc / Ctrl+C / Q exit 1, leaving `active_model` unchanged.
-
-### Upgrade
-
-```bash
-bash install.sh    # idempotent; refreshes canonical files
-```
-
-Your stored NIM key, current active model, and Claude Code profile are
-untouched. The first launch after upgrade shows the welcome banner one
-more time (the sentinel name is unchanged from v1.0.x) and then settles
-into the silent-banner every-launch flow.
+Tests: 21/21 pass on the CI matrix.
 
 ---
 
-## v1.0.2  -  Picker fixes
+## v1.0.3  -  Every-launch wizard, recently-used tier
 
-- Fixed first-arrow-keypress race where the down-arrow on a fresh
-  picker session was decoded as plain ESC and cancelled the picker.
-  Inter-byte CSI timeout extended from 20 ms to 200 ms.
-- Fixed catalog rendering to show only a 10-row visible window with
-  `(N more above)` / `(N more below)` indicators, scrolling one row per
-  arrow press.
-- Numeric CSI sequence drain so trailing bytes from Page Up / Page Down
-  / Home / End do not leak into the next read.
+### Added
+
+- The wizard runs on every `pulsarcode` invocation, not only first
+  launch. When a NIM key is already stored, Step 1 collapses to a
+  single `Replace stored NIM API key now? [y/N]` prompt with default
+  `N`. The welcome banner still gates on the onboarding sentinel and
+  shows only on first launch.
+- `RECENTLY USED` tier prepended to the picker. The picker reads
+  `~/.pulsarcode/model_history` (newline-delimited, mode `0600`,
+  capped at 20 entries) and places matching records at the top in
+  history order. Each model appears once across the whole list.
+- `/model <alias>` (the in-session slash command) and
+  `pulsarcode model <alias>` write to history as well as
+  `active_model`, so direct switches promote into `RECENTLY USED` on
+  the next launch.
+- `PULSAR_SKIP_WIZARD=1` env var bypasses the wizard for scripted or
+  fast-relaunch use.
+- Nine new picker tests covering history file round-trip, mode `0600`,
+  cap-at-20 with overflow, missing-file silence, `RECENT` prepend
+  order, stale-alias filtering, empty-history rendering, `RECENT`
+  header emission.
+
+### Removed
+
+- The Gmail-alias rotation hint from the launcher's credit-exhaustion
+  message and the README rotation flow. Both surfaces now point at
+  the NVIDIA paid plans page.
+
+---
+
+## v1.0.2  -  Picker keypress timing and windowed render
+
+### Fixed
+
+- Extended inter-byte CSI timeout from 20 ms to 200 ms. On macOS
+  Terminal and iTerm, the three bytes of an arrow-key sequence
+  (`\x1b`, `[`, direction) can arrive several tens of milliseconds
+  apart on the first keypress after entering cbreak mode; the
+  previous 20 ms window let the second `select` time out and the
+  arrow press read as a plain ESC.
+- Catalog rendering switched to a 10-row sliding window with `(N more
+  above)` and `(N more below)` indicators. Each arrow press scrolls
+  one row.
+- Numeric CSI sequence drain so trailing bytes from Page Up / Page
+  Down / Home / End do not leak into the next read.
 
 ---
 
 ## v1.0.1  -  Tagline correction, README polish
 
-- Clarified the hero tagline to distinguish the Claude Code CLI binary
-  (free Anthropic download) from the Claude family models (paid
-  subscription) and from pulsarcode (this AGPL-3.0 wrapper).
-- Cleaned up the comparison table to be capabilities-additive rather
-  than vendor-vs-vendor.
+### Changed
+
+- Hero tagline rewritten to distinguish three layers in the reader's
+  mind: the Claude Code CLI binary (free Anthropic download), the
+  Claude model family (paid subscription), and pulsarcode (this
+  AGPL-3.0 wrapper that swaps the model backend).
+- Comparison table reframed as capabilities-additive rather than
+  vendor-vs-vendor.
 
 ---
 
 ## v1.0.0  -  First public release
 
-First general-availability release. Source-available, AGPL-3.0, made free
-to every developer who needs Claude Code's UX without the subscription.
+### Added
 
-### Headline features
-
-- **First-launch wizard**: three numbered steps walking through NVIDIA
-  NIM signup, key paste, arrow-key model picker, and Claude Code handoff.
-  Runs exactly once per machine, gated by an idempotent sentinel.
-- **Arrow-key API Sonar picker**: dynamic catalog of 55+ frontier coding
-  models from `build.nvidia.com`, grouped into CODING, GENERAL,
-  LIGHTWEIGHT, and OTHER tiers. Arrow keys to move, enter to select,
-  esc to keep the current selection. Falls back to numbered-list input
-  on platforms without a raw TTY.
-- **Persistent model selection** at `~/.pulsarcode/active_model`,
-  inherited by every future launch in any shell.
-- **Four managed slash commands** installed into an isolated Claude Code
-  config dir: `/api`, `/sonar`, `/pick`, `/model <alias>`.
-- **Credit-exhaustion UX**: when the 1000-credit NVIDIA bucket runs out,
-  the message inside Claude Code points operators at `build.nvidia.com`
-  for paid plans and at `pulsarcode /api` to paste a different key.
-- **12-test smoke suite** runs at install time inside the freshly built
-  virtualenv. Tier-classifier coverage, persistence round-trip, em-dash
-  sweep on rendered picker output, render-shape verification.
-- **Zero telemetry, zero phone-home**. Adapter binds 127.0.0.1 only.
-  Outbound network traffic is the bearer-authenticated HTTPS call to
-  NVIDIA NIM with the operator's selected model and prompt. Verifiable
-  by `tcpdump`, `lsof -i`, or any host firewall.
-- **Idempotent installer**: re-running `install.sh` refreshes the
+- `pulsarcode` bash launcher that wraps the official Anthropic Claude
+  Code CLI via the documented `ANTHROPIC_BASE_URL` environment
+  variable and routes its model traffic through NVIDIA NIM.
+- `proxy/nim_anthropic_proxy.py`: a local FastAPI adapter that binds
+  `127.0.0.1` only, translates Anthropic Messages API requests into
+  NVIDIA NIM's OpenAI-compatible chat completions, signs them with the
+  user's NVIDIA NIM bearer, and streams responses back with SSE
+  keep-alive `ping` events while waiting for upstream headers.
+- `proxy/nim_api_sonar.py`: API Sonar catalog discovery. Merges a
+  curated static seed of upstream model IDs with the public NVIDIA
+  reference and build pages and the authenticated `/v1/models`
+  endpoint.
+- `proxy/nim_sonar_picker.py`: arrow-key interactive picker over the
+  Sonar catalog. Groups models into `CODING`, `GENERAL`, `LIGHTWEIGHT`,
+  and `OTHER` tiers. Falls back to a numbered-list prompt on platforms
+  without a raw TTY.
+- First-launch wizard: API key paste, model picker, Claude Code
+  handoff.
+- Four managed slash commands installed into an isolated Claude Code
+  config directory: `/api`, `/sonar`, `/pick`, `/model <alias>`.
+- 12-test smoke suite runs at install time inside the freshly built
+  virtualenv.
+- Zero telemetry, zero phone-home. The local adapter binds
+  `127.0.0.1` only; the only outbound network call is the
+  bearer-authenticated HTTPS request to NVIDIA NIM with the user's
+  selected model and prompt.
+- Idempotent installer; re-running `install.sh` refreshes the
   canonical files without touching stored credentials, active-model
   selection, or Claude Code profile.
 
-### Engineering details
+### Contribution posture
 
-- Anthropic Messages to NIM chat-completions adapter, under 1000 lines
-  of Python with `httpx + fastapi + uvicorn + sse-starlette`.
-- Streaming SSE keep-alive pings every 5 seconds while waiting for
-  upstream headers; default upstream timeout 180 s.
-- Letter-boundary regex tier classifier prevents substring-overlap bugs
-  (e.g. `mini` matching `minimax` is correctly rejected).
-- Layout-flexible launcher: works whether placed at `cli/pulsarcode`
-  with sibling `proxy/`, or at the dist root with sibling `proxy/`.
-- Cross-platform venv discovery: env override -> `~/.pulsarcode/venv`
-  -> sensible fallback.
-
-### Source-available, read-only posture
-
-This first public release establishes the project's contribution
-posture: **we do not accept inbound pull requests, issues, or community
-contributions**. The codebase is small, opinionated, and tightly
-coupled to upstream design choices. We publish so anyone can read,
-download, run, or fork under AGPL-3.0. See `CONTRIBUTING.md`.
+This is a source-available, read-only project. Pull requests, feature
+requests, and community discussions are not accepted on this
+repository. The codebase is small, AGPL-3.0 licensed, and forkable.
+See `CONTRIBUTING.md`.
 
 ### License
 

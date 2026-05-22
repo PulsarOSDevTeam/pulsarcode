@@ -159,14 +159,13 @@ def tier_of(record: NIMModelRecord) -> str:
 # Coding-tier intra-tier order. Lower = earlier.
 _CODING_ORDER_HINTS: Tuple[Tuple[str, int], ...] = (
     ("kimi-k2.6", 0),
-    ("kimi-k2-thinking", 1),
-    ("kimi-k2-instruct", 2),
-    ("qwen3-coder-480b", 3),
-    ("qwen2.5-coder-32b", 4),
-    ("qwen2.5-coder-7b", 5),
-    ("deepseek-v4-pro", 6),
-    ("deepseek-v4-flash", 7),
-    ("gpt-oss-120b", 8),
+    ("qwen3-coder-480b", 1),
+    ("deepseek-v4-pro", 2),
+    ("deepseek-v4-flash", 3),
+    ("gpt-oss-120b", 4),
+    ("codestral", 5),
+    ("codellama", 6),
+    ("codegemma", 7),
 )
 
 
@@ -329,7 +328,7 @@ def _ansi_enabled() -> bool:
     return True
 
 
-_EMBER = "\x1b[38;5;208m"  # PulsarOS ember accent
+_EMBER = "\x1b[38;5;208m"  # ember accent
 _DIM = "\x1b[38;5;240m"
 _GREEN = "\x1b[38;5;46m"
 _RESET = "\x1b[0m"
@@ -703,8 +702,9 @@ def pick_model(
         return None
 
     if not _tty_available():
-        # Interactive shell, but no termios (Windows native, etc.).
-        # GAP-D fix per audit 2026-05-20: fall back to numbered list + integer input.
+        # Interactive shell without termios (Windows native, certain CI
+        # runners). Fall back to numbered-list + integer input so the
+        # picker still works without raw-TTY arrow-key support.
         return _pick_numbered_fallback(rows, current_alias, out=out)
 
     cursor = find_alias(rows, current_alias)
@@ -817,7 +817,7 @@ def pick_model(
 # ---------------------------------------------------------------------------
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="PulsarOS API Sonar interactive model picker.")
+    parser = argparse.ArgumentParser(description="pulsarcode API Sonar interactive model picker.")
     parser.add_argument("--api-base", default=os.environ.get("NVIDIA_NIM_API_BASE", DEFAULT_API_BASE))
     parser.add_argument("--public-model", default=os.environ.get("PULSAR_NIM_PUBLIC_MODEL", DEFAULT_PUBLIC_MODEL))
     parser.add_argument("--no-network", action="store_true", help="Use cached or static catalog only.")
