@@ -1,0 +1,6 @@
+# Build backend and frontend for the release workflow, compiled with hashes into
+# requirements-build.txt (see the command at the top of that file). Keep the backend in
+# step with [build-system] requires in pyproject.toml.
+build
+hatchling
+hatch-fancy-pypi-readme

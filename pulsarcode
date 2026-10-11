@@ -1,0 +1,98 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 PulsarOS Intelligence Inc.
+#
+# pulsarcode: run the official Claude Code CLI on any model you hold a key for.
+#
+# This file is a thin shim. It finds the Pulsar Code engine (the `pulsar`
+# Python package) and its private virtualenv, then hands over. Everything
+# else (boot sequence, key uplink, model picker, Pulsar Core, launch)
+# lives in pulsar/. Run `pulsarcode help` for usage.
+#
+# POSIX sh on purpose: it runs where bash does not exist (Alpine and other
+# busybox systems) and under bash 3.2, dash, busybox ash, ksh and zsh as sh.
+
+set -eu
+unset CDPATH
+
+# HOME can be unset (systemd units, some CI runners, `env -i`): ask the user database.
+if [ -z "${HOME:-}" ]; then
+    h=""
+    if command -v getent >/dev/null 2>&1; then
+        h=$(getent passwd "$(id -u)" 2>/dev/null | cut -d: -f6) || h=""
+    fi
+    if [ -z "$h" ]; then
+        u=$(id -un 2>/dev/null) || u=""
+        case $u in
+            ""|-*|*[!A-Za-z0-9._-]*) ;;
+            *) eval "h=~$u"; case $h in "~"*) h="" ;; esac ;;
+        esac
+    fi
+    if [ -n "$h" ] && [ -d "$h" ]; then
+        HOME=$h
+        export HOME
+    elif [ -z "${PULSAR_HOME:-}" ]; then
+        echo "pulsarcode: HOME is not set and your home folder could not be found; set HOME or PULSAR_HOME" >&2
+        exit 1
+    fi
+fi
+
+self=$0
+while [ -L "$self" ]; do
+    link=$(readlink "$self")
+    case $link in
+        /*) self=$link ;;
+        *)  self=$(dirname "$self")/$link ;;
+    esac
+done
+here=$(cd -P "$(dirname "$self")" && pwd -P)
+
+# Installed as <home>/app/pulsarcode, next to that home's marker (the installers' layout), the
+# command runs against that home unless PULSAR_HOME names another one: an install into a custom
+# PULSAR_HOME never picks up the runtime or the state of ~/.pulsarcode.
+if [ -z "${PULSAR_HOME:-}" ]; then
+    case $here in
+        ?*/app)
+            if [ -f "${here%/app}/.pulsarcode-home" ]; then
+                PULSAR_HOME=${here%/app}
+                export PULSAR_HOME
+            fi ;;
+    esac
+fi
+PULSAR_HOME="${PULSAR_HOME:-$HOME/.pulsarcode}"
+
+if [ -d "$here/pulsar" ]; then
+    app=$here                         # running from a checkout or the installed app dir
+elif [ -d "$PULSAR_HOME/app/pulsar" ]; then
+    app=$PULSAR_HOME/app
+else
+    echo "pulsarcode: engine not found. Reinstall:" >&2
+    echo "  curl -fsSL https://raw.githubusercontent.com/PulsarOSDevTeam/pulsarcode/main/install.sh | bash" >&2
+    exit 127
+fi
+
+py=${PULSAR_PYTHON:-}
+if [ -z "$py" ]; then
+    for cand in "$PULSAR_HOME/venv/bin/python" "$app/.venv/bin/python"; do
+        if [ -x "$cand" ]; then py=$cand; break; fi
+    done
+fi
+if [ -z "$py" ]; then
+    # The probe runs python3 the way the launch below does (-E -B: the user site stays on, so
+    # `pip install --user` requirements count) and drops the current directory first, so a
+    # starlette.py or httpx.py in the folder you start from is never imported.
+    py=$(command -v python3 || true)
+    if [ -z "$py" ] || ! "$py" -E -B -c "import sys;sys.path[:]=[p for p in sys.path if p not in ('','.')];import starlette, uvicorn, httpx" >/dev/null 2>&1; then
+        echo "pulsarcode: the Pulsar Code virtualenv is missing. Reinstall:" >&2
+        echo "  curl -fsSL https://raw.githubusercontent.com/PulsarOSDevTeam/pulsarcode/main/install.sh | bash" >&2
+        exit 127
+    fi
+fi
+
+# Never `-m pulsar`: that would put the current directory first on sys.path, and a repo
+# containing its own pulsar/ (or a file shadowing the standard library) would run as you.
+# This bootstrap drops the current directory and pins the app dir before any import.
+# -E: ignore PYTHONPATH (an empty or relative element adds the current folder, whose
+# sitecustomize.py would run before the bootstrap), PYTHONHOME and PYTHONSTARTUP.
+boot="import sys;r=sys.argv.pop(1);m=sys.argv.pop(1);sys.path[:]=[r]+[p for p in sys.path if p not in ('','.',r)];import runpy;sys.argv[0]=m;runpy.run_module(m,run_name='__main__',alter_sys=True)"
+exec "$py" -E -B -c "$boot" "$app" pulsar "$@"

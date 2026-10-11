@@ -1,0 +1,37 @@
+{
+  "deck": {
+    "kind": "deck",
+    "id": "orbit-plan",
+    "title": "orbit 2.0 plan",
+    "slides": [
+      {"layout": "title", "title": "orbit 2.0", "subtitle": "what ships, and when",
+       "body": "A plan drawn from the code in ~/code/orbit."},
+      {"title": "What ships",
+       "body": "- **Live sky map** for `orbit watch`\n- Weekly refresh of the orbital data cache\n- Pass search moves to a vectorized propagator\n- `orbit next` learns `--min-elevation`"},
+      {"title": "Test coverage by module", "subtitle": "percent of lines covered today",
+       "embed": {"kind": "chart", "chart": "bar", "unit": "%", "labels": ["cli", "predict", "cache", "render"],
+                 "series": [{"name": "coverage", "values": [92, 88, 71, 64]}]}},
+      {"title": "How a pass is found",
+       "embed": {"kind": "diagram", "direction": "LR",
+                 "nodes": ["TLE cache", "Propagator", "Visibility", "orbit next", "Sky map"],
+                 "edges": [["TLE cache", "Propagator", "orbits"], ["Propagator", "Visibility", "positions"],
+                           ["Visibility", "orbit next", "passes"], ["Visibility", "Sky map", "live"]]}},
+      {"title": "Timeline",
+       "embed": {"kind": "timeline", "events": [
+         {"when": "Oct 6", "title": "Feature freeze", "detail": "sky map behind a flag", "status": "done"},
+         {"when": "Oct 13", "title": "Beta", "detail": "weekly cache refresh on", "status": "active"},
+         {"when": "Oct 20", "title": "Release", "detail": "orbit 2.0 on PyPI", "status": "pending"}]}}
+    ]
+  },
+  "progress": {
+    "kind": "progress",
+    "id": "gateway-migration",
+    "title": "api-gateway: migration",
+    "steps": [
+      {"title": "Inventory routes", "status": "done"},
+      {"title": "Port auth middleware", "status": "done"},
+      {"title": "Rewrite rate limiter", "status": "active", "detail": "token bucket per tenant"},
+      {"title": "Load test", "status": "pending"}
+    ]
+  }
+}

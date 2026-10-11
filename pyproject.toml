@@ -1,0 +1,166 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 PulsarOS Intelligence Inc.
+#
+# Python packaging for Pulsar Code (PyPI name: pulsarcode, import package: pulsar). Once it is on
+# PyPI (coming with the first public release):
+#
+#   pipx install pulsarcode        # recommended: isolated venv, `pulsarcode` on PATH
+#   uv tool install pulsarcode     # same idea with uv
+#
+# The import package is called `pulsar`, which is also the import name of Apache
+# Pulsar's `pulsar-client` wheel. Installing both into one environment makes them
+# overwrite each other; pipx and `uv tool` give Pulsar Code its own venv and avoid it.
+#
+# The version lives in pulsar/__init__.py (__version__) and is read statically by hatchling,
+# which also builds without writing anything (egg-info, build/) into the checkout.
+# Dependencies mirror requirements.txt (tests/test_packaging.py keeps them in sync).
+# The release workflow builds with the exact, hash-pinned backend versions listed in
+# tools/release/requirements-build.txt (python -m build --no-isolation).
+
+[build-system]
+requires = ["hatchling>=1.27", "hatch-fancy-pypi-readme>=24.1"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pulsarcode"
+dynamic = ["version", "readme"]
+description = "Run the official Claude Code CLI on any model. One command, any provider: NVIDIA NIM, OpenRouter, OpenAI, Gemini, Groq, DeepSeek, Ollama and more."
+requires-python = ">=3.9"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "PulsarOS Intelligence Inc.", email = "yassine@pulsaros.ca" }]
+maintainers = [{ name = "PulsarOS Intelligence Inc." }]
+keywords = [
+    "claude-code",
+    "claude",
+    "llm",
+    "ai-coding",
+    "coding-assistant",
+    "nvidia-nim",
+    "openrouter",
+    "ollama",
+    "openai",
+    "gemini",
+    "deepseek",
+    "groq",
+    "terminal",
+    "cli",
+    "tui",
+    "agents",
+    "mcp",
+    "developer-tools",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Terminals",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "starlette>=0.40,<2",
+    "uvicorn>=0.34,<1.0",
+    "httpx[socks]>=0.28,<1.0",
+    "truststore>=0.9; python_version >= '3.10'",
+]
+
+[project.scripts]
+pulsarcode = "pulsar.cli:main"
+
+[project.urls]
+# The repository until a project site exists.
+Homepage = "https://github.com/PulsarOSDevTeam/pulsarcode"
+Source = "https://github.com/PulsarOSDevTeam/pulsarcode"
+Changelog = "https://github.com/PulsarOSDevTeam/pulsarcode/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/PulsarOSDevTeam/pulsarcode#readme"
+Releases = "https://github.com/PulsarOSDevTeam/pulsarcode/releases"
+
+[tool.hatch.version]
+path = "pulsar/__init__.py"
+
+# PyPI long description: README.md with its relative links made absolute. On pypi.org a
+# relative link such as (LICENSE) or (#requirements) resolves against the PyPI project page
+# and breaks, so documents and anchors point at GitHub and images at raw.githubusercontent,
+# all pinned to the release tag ($HFPR_VERSION is the package version).
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "README.md"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+# Markdown images: ![alt](path)
+pattern = '!\[([^\]]*)\]\((?![a-zA-Z][a-zA-Z0-9+.-]*:|#|/)([^)\s]+)\)'
+replacement = '![\1](https://raw.githubusercontent.com/PulsarOSDevTeam/pulsarcode/v$HFPR_VERSION/\2)'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+# Markdown links to files: [text](path)
+pattern = '\]\((?![a-zA-Z][a-zA-Z0-9+.-]*:|#|/)([^)\s]+)\)'
+replacement = '](https://github.com/PulsarOSDevTeam/pulsarcode/blob/v$HFPR_VERSION/\1)'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+# Markdown links to headings: [text](#anchor)
+pattern = '\]\(#([^)\s]+)\)'
+replacement = '](https://github.com/PulsarOSDevTeam/pulsarcode/blob/v$HFPR_VERSION/README.md#\1)'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+# HTML images: src="path"
+pattern = '(<img\b[^>]*?\ssrc=")(?![a-zA-Z][a-zA-Z0-9+.-]*:|#|/)([^"]+)"'
+replacement = '\1https://raw.githubusercontent.com/PulsarOSDevTeam/pulsarcode/v$HFPR_VERSION/\2"'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+# HTML <source srcset="path"> (the dark-mode and reduced-motion variants inside <picture>). PyPI cleans
+# the description against a fixed list of allowed tags; wherever <picture> and <source> are dropped, the
+# <img> inside each <picture>, made absolute by the image rule above, is what shows.
+pattern = '(<source\b[^>]*?\ssrcset=")(?![a-zA-Z][a-zA-Z0-9+.-]*:|#|/)([^"]+)"'
+replacement = '\1https://raw.githubusercontent.com/PulsarOSDevTeam/pulsarcode/v$HFPR_VERSION/\2"'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+# HTML links to files: href="path"
+pattern = '(<a\b[^>]*?\shref=")(?![a-zA-Z][a-zA-Z0-9+.-]*:|#|/)([^"]+)"'
+replacement = '\1https://github.com/PulsarOSDevTeam/pulsarcode/blob/v$HFPR_VERSION/\2"'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+# HTML links to headings: href="#anchor"
+pattern = '(<a\b[^>]*?\shref=")#([^"]*)"'
+replacement = '\1https://github.com/PulsarOSDevTeam/pulsarcode/blob/v$HFPR_VERSION/README.md#\2"'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+# Reference-style link definitions: [label]: path
+pattern = '(?m)^( {0,3}\[[^\]]+\]:[ \t]*)(?![a-zA-Z][a-zA-Z0-9+.-]*:|#|/)(\S+)'
+replacement = '\1https://github.com/PulsarOSDevTeam/pulsarcode/blob/v$HFPR_VERSION/\2'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+# Reference-style link definitions: [label]: #anchor
+pattern = '(?m)^( {0,3}\[[^\]]+\]:[ \t]*)#(\S+)'
+replacement = '\1https://github.com/PulsarOSDevTeam/pulsarcode/blob/v$HFPR_VERSION/README.md#\2'
+
+[tool.hatch.build.targets.wheel]
+# Everything the engine ships lives under pulsar/ (Python today; any data files that land
+# there later are picked up too). Caches are excluded through .gitignore and the list below.
+packages = ["pulsar"]
+# The Stage pane plugin (pulsar/fnplug, including its .claude-plugin manifest) ships; its dev tests do not.
+exclude = ["__pycache__", "*.pyc", "*.pyo", "/pulsar/fnplug/tests"]
+# hatchling >= 1.27 writes Metadata-Version 2.5 by default, which twine < 7 (bundled by
+# pypa/gh-action-pypi-publish up to v1.14.1) rejects. 2.4 carries everything used here
+# (License-Expression, License-File) and every current tool accepts it.
+core-metadata-version = "2.4"
+
+[tool.hatch.build.targets.sdist]
+include = ["/pulsar", "/README.md", "/LICENSE", "/CHANGELOG.md", "/requirements.txt", "/pyproject.toml"]
+exclude = ["__pycache__", "*.pyc", "*.pyo", "/pulsar/fnplug/tests"]
+core-metadata-version = "2.4"

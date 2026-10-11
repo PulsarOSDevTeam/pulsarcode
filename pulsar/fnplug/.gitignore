@@ -1,0 +1,2 @@
+# Claude Code writes generated types into a plugin folder it loads; they are never part of this tree.
+.claude-plugin/types/

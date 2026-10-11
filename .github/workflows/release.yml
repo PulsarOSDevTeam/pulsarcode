@@ -1,0 +1,408 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 PulsarOS Intelligence Inc.
+#
+# Release pipeline, run when a tag vX.Y.Z (PEP 440: v3.1.0rc1, v3.1.0.post1, ...) is pushed:
+#
+#   verify          tag == pulsar.__version__, npm version == its semver spelling; tests;
+#                   secret and em-dash audits. Decides pre-release / npm dist-tag.
+#   build           sdist + wheel (hash-pinned backend) + app archives + SHA256SUMS, then
+#                   build provenance attestations (public repository only) and the upload,
+#                   before anything else runs
+#   check           in a separate job with no write or OIDC access: checksums, twine check
+#                   with the publish action's twine, wheel install smoke test
+#   github-release  GitHub release with every file attached (pre-release for a/b/rc/dev). Files
+#                   are never replaced: a re-run adds missing ones and fails on one that differs
+#   pypi            PyPI via trusted publishing (environment "pypi", no token), once the
+#                   GitHub release and its SHA256SUMS exist
+#   npm             npm via trusted publishing (environment "npm", no token), only when the
+#                   repository variable NPM_PUBLISH is "true", once the GitHub release exists;
+#                   provenance only from a public repository; pre-releases go to dist-tag next
+#   manifests       stable releases only: pull request pointing Homebrew, Scoop and npm at
+#                   the release, then starts the tests workflow on it
+#
+# Every job declares the least permissions it needs. Third-party actions are pinned by full
+# commit SHA; Dependabot keeps them current. Untrusted values (tag names) reach scripts through
+# environment variables, never through ${{ }} inside `run:`. Who may push a v* tag is limited
+# by the tag ruleset tools/github/setup.sh creates; the pypi and npm environments only accept
+# v* tags and can require a reviewer.
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONUTF8: '1'
+  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+  PULSAR_FX: 'off'
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.versions.outputs.version }}
+      npm_version: ${{ steps.versions.outputs.npm_version }}
+      npm_tag: ${{ steps.versions.outputs.npm_tag }}
+      prerelease: ${{ steps.versions.outputs.prerelease }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Tag, __version__ and npm version agree
+        id: versions
+        env:
+          TAG: ${{ github.ref_name }}
+        run: python tools/release/update_manifests.py --check-tag "$TAG"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt pytest pyflakes pyyaml
+
+      - name: Tests
+        env:
+          PULSAR_OFFLINE: '1'
+        run: python -m pytest -q
+
+      - name: pyflakes
+        run: python -m pyflakes pulsar tests tools
+
+      - name: Secret-pattern audit
+        run: python tools/release/secret_scan.py
+
+      - name: Em-dash audit
+        run: python tools/release/em_dash_audit.py
+
+      - name: npm wrapper tests
+        run: node --test packaging/npm/test/pulsarcode.test.js
+
+  build:
+    name: build + attest
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Only first-party code and the hash-pinned build backend run here, and the files are
+    # attested and uploaded straight after they are built. Anything that installs or executes
+    # unpinned dependencies (the wheel smoke test) runs in `check`, on another machine,
+    # without id-token or write access, so it cannot touch what gets signed.
+    permissions:
+      contents: read
+      id-token: write      # sign the provenance attestations (Sigstore)
+      attestations: write  # store them on the repository
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Install the pinned build backend (hash-checked)
+        run: python -m pip install --require-hashes --no-deps -r tools/release/requirements-build.txt
+
+      - name: Build sdist and wheel
+        run: python -m build --no-isolation --outdir dist
+
+      - name: App archives and SHA256SUMS
+        run: |
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
+          python tools/release/build_archives.py --out dist --checksums
+          cat dist/SHA256SUMS
+
+      - name: Build provenance attestations
+        # Artifact attestations need a public repository (or GitHub Enterprise Cloud): while this one
+        # is private, the release is built and checksummed without them.
+        if: github.event.repository.visibility == 'public'
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS
+
+      - name: Upload dist
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+  check:
+    name: check the built files
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Download dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: dist
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum -c SHA256SUMS
+
+      - name: twine check with the publish action's twine (hash-checked)
+        run: |
+          python -m venv "$RUNNER_TEMP/twine"
+          "$RUNNER_TEMP/twine/bin/python" -m pip install --require-hashes --no-deps \
+            -r tools/release/requirements-check.txt
+          "$RUNNER_TEMP/twine/bin/python" -m twine check --strict \
+            dist/pulsarcode-*.whl dist/pulsarcode-[0-9]*.tar.gz
+
+      - name: Smoke-test the built wheel (fresh venv, hostile working directory)
+        run: python tools/release/wheel_smoke.py --wheel dist/pulsarcode-*.whl
+
+  github-release:
+    name: GitHub release
+    needs: [verify, check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write  # create the release and upload its files
+    steps:
+      - name: Download dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: dist
+
+      - name: Create the release (a re-run adds missing files and never replaces one)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+        run: |
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            # What a release publishes stays as published: a missing file is added, a file that is
+            # already there must be byte-identical to this (reproducible) build, anything else fails.
+            published="$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name')"
+            status=0
+            for f in dist/*; do
+              name="$(basename "$f")"
+              if printf '%s\n' "$published" | grep -qxF -- "$name"; then
+                here="$(mktemp -d)"
+                gh release download "$TAG" --repo "$REPO" --pattern "$name" --dir "$here"
+                if cmp -s "$f" "$here/$name"; then
+                  echo "$name: already published, byte for byte"
+                else
+                  echo "::error::$name on release $TAG differs from this build; published files are never replaced"
+                  status=1
+                fi
+              else
+                gh release upload "$TAG" "$f" --repo "$REPO"
+              fi
+            done
+            exit "$status"
+          fi
+          flags=()
+          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
+          gh release create "$TAG" dist/* --repo "$REPO" --verify-tag --generate-notes \
+            --title "Pulsar Code ${TAG#v}" "${flags[@]}"
+
+  pypi:
+    name: PyPI (trusted publishing)
+    # After the GitHub release: a version on PyPI always has its SHA256SUMS and archives published.
+    needs: [check, github-release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/pulsarcode/
+    permissions:
+      id-token: write  # OIDC token exchanged for a short-lived PyPI upload token
+    steps:
+      - name: Download dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: dist
+
+      - name: Keep only the sdist and wheel
+        run: |
+          mkdir pypi
+          cp dist/pulsarcode-*.whl pypi/
+          cp dist/pulsarcode-[0-9]*.tar.gz pypi/
+          ls -l pypi
+
+      - name: Publish to PyPI
+        # v1.13.0 bundles twine 6.1.0 + packaging 25.0, the versions pinned in
+        # tools/release/requirements-check.txt for the `check` job. Bump both together.
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
+        with:
+          packages-dir: pypi/
+          skip-existing: true
+
+  npm:
+    name: npm (trusted publishing)
+    needs: [verify, check, github-release]
+    # Opt-in: set the repository variable NPM_PUBLISH to "true" once the package exists on
+    # npm and has this workflow and the "npm" environment as its trusted publisher. Post-
+    # releases (X.Y.Z.postN) have no semver spelling and are not published to npm.
+    if: vars.NPM_PUBLISH == 'true' && needs.verify.outputs.npm_version != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/pulsarcode
+    permissions:
+      contents: read
+      id-token: write  # OIDC for npm trusted publishing; also signs the provenance statement
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: '24'          # Node 24 LTS bundles npm 11 (trusted publishing needs 11.5.1+)
+          package-manager-cache: false
+
+      - name: npm supports trusted publishing (11.5.1 or later)
+        run: |
+          v="$(npm --version)"
+          echo "node $(node --version), npm $v"
+          node -e 'const [a,b,c]=process.argv[1].split(".").map(Number);
+            process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)' "$v" \
+            || { echo "::error::npm $v cannot use trusted publishing (needs 11.5.1 or later)"; exit 1; }
+
+      - name: Publish to npm
+        env:
+          NPM_VERSION: ${{ needs.verify.outputs.npm_version }}
+          NPM_TAG: ${{ needs.verify.outputs.npm_tag }}
+          VISIBILITY: ${{ github.event.repository.visibility }}
+        run: |
+          cd packaging/npm
+          version="$(node -p "require('./package.json').version")"
+          if [ "$version" != "$NPM_VERSION" ]; then
+            echo "::error::packaging/npm/package.json version $version is not $NPM_VERSION"
+            exit 1
+          fi
+          case "$NPM_TAG" in latest|next) ;; *) echo "::error::bad dist-tag $NPM_TAG"; exit 1 ;; esac
+          if npm view "pulsarcode@$version" version >/dev/null 2>&1; then
+            echo "::notice::pulsarcode@$version is already on npm; nothing to do."
+            exit 0
+          fi
+          cp ../../LICENSE LICENSE
+          npm pack --dry-run
+          # No token anywhere: npm exchanges this job's OIDC token for a one-time publish
+          # credential. Provenance needs a public source repository: while this one is private,
+          # the package is published without it.
+          provenance=--provenance=false
+          if [ "$VISIBILITY" = public ]; then provenance=--provenance; fi
+          npm publish "$provenance" --access public --tag "$NPM_TAG"
+
+  manifests:
+    name: Homebrew + Scoop manifests
+    needs: [verify, github-release]
+    # Pre-releases never move the stable Homebrew formula or Scoop manifest.
+    if: needs.verify.outputs.prerelease == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write       # push the release/manifests-<tag> branch
+      pull-requests: write  # open the pull request
+      actions: write        # start the tests workflow on it (see below)
+    steps:
+      - name: Checkout the default branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Download dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: ${{ runner.temp }}/dist
+
+      - name: Point the manifests at this release
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          DIST: ${{ runner.temp }}/dist
+        run: python3 tools/release/update_manifests.py --dist "$DIST" --version "$VERSION"
+
+      - name: Upload the updated manifests
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: manifests
+          path: |
+            packaging/homebrew/pulsarcode.rb
+            packaging/scoop/pulsarcode.json
+            packaging/npm/package.json
+          if-no-files-found: error
+
+      - name: Open a pull request
+        # Needs "Allow GitHub Actions to create and approve pull requests" in the repository
+        # settings. Without it this step fails softly and the artifact above is the hand-off.
+        #
+        # Events caused by GITHUB_TOKEN start no workflow runs, so the pull_request event of
+        # this PR never triggers tests.yml. workflow_dispatch is the documented exception:
+        # the step dispatches tests.yml on the branch, and those check runs land on the PR's
+        # head commit. If that fails, close and reopen the PR (or push to its branch) by hand.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          files=(packaging/homebrew/pulsarcode.rb packaging/scoop/pulsarcode.json packaging/npm/package.json)
+          if git diff --quiet -- "${files[@]}"; then
+            echo "Manifests already point at $TAG."
+            exit 0
+          fi
+          branch="release/manifests-$TAG"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add -- "${files[@]}"
+          git commit -m "packaging: point Homebrew, Scoop and npm at $TAG"
+          gh auth setup-git  # git asks gh for the token at push time; nothing is stored in .git
+          git push --force origin "$branch"
+          if gh pr view "$branch" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Pull request for $branch already open; branch updated."
+          else
+            gh pr create --repo "$REPO" --base "$BASE" --head "$branch" \
+              --title "packaging: manifests for $TAG" \
+              --body "Automated by the release workflow: url and sha256 of the $TAG app archives for the Homebrew formula and the Scoop manifest, and the npm package version. The release workflow starts the tests workflow on this branch with workflow_dispatch, because pull requests opened with GITHUB_TOKEN trigger no runs; if no checks appear, close and reopen this pull request. After merging, copy packaging/homebrew/pulsarcode.rb to the tap and packaging/scoop/pulsarcode.json to the bucket."
+          fi
+          gh workflow run test.yml --repo "$REPO" --ref "$branch"

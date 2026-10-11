@@ -1,0 +1,35 @@
+{
+  "alt": "Pulsar Code model picker: searching kimi across three providers' catalogs, moving the selection and choosing a model",
+  "title": "pulsarcode pick",
+  "cols": 112,
+  "rows": 28,
+  "cmd": ["./pulsarcode", "pick"],
+  "env": {"PULSAR_SEED": "5"},
+  "keys": [[3.3, "\u001b[B"], [3.75, "\u001b[B"], [4.2, "\u001b[A"], [4.8, "\r"]],
+  "sync": [[1.0, "MODEL"]],
+  "duration": 7.5,
+  "fps": 12,
+  "start_at": "MODEL",
+  "cut_before": "next launch uses",
+  "max_frames": 50,
+  "hold_last": 1.2,
+  "budget": {"svg_kb": 650, "gzip_kb": 120, "elements": 16000},
+  "type": [[2.15, "kimi"]],
+  "demo": true,
+  "camera": [
+    [["first:\u2315 k", -0.6], 1.0, 56, 14, "SETTLE"],
+    [["first:\u2315 k", 0.2], 1.6, "at:\u2315", 4, "SETTLE"],
+    [["first:\u2315 kimi", 1.0], 1.6, "at:\u2315", 4, "SETTLE"],
+    [["first:\u2315 kimi", 1.8], 1.0, 56, 14, "GLIDE"]
+  ],
+  "captions": [
+    [
+      ["first:\u2315 kimi", 0.1],
+      ["end", 1.9],
+      "one search across connected providers",
+      "kimi",
+      {"poster": true}
+    ]
+  ],
+  "typed_keys": [[2.4, "k"], [2.473, "i"], [2.506, "m"], [2.559, "i"]]
+}

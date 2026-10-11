@@ -1,0 +1,41 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtualenvs
+.venv/
+venv/
+
+# Secrets and local state: never committed
+.env
+.env.*
+*.pem
+*.key
+*.p12
+id_rsa*
+id_ecdsa*
+id_ed25519*
+keys.json
+.pulsarcode/
+
+# Outputs of the repository's own tools
+dist/
+build/
+*.egg-info/
+compat.json
+*.tgz
+node_modules/
+# Types Claude Code generates into the Stage pane plugin it loads (also in pulsar/fnplug/.gitignore)
+pulsar/fnplug/.claude-plugin/types/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp

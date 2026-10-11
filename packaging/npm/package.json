@@ -1,0 +1,48 @@
+{
+  "name": "pulsarcode",
+  "version": "3.0.0",
+  "description": "Run the official Claude Code CLI on any model. One command for NVIDIA NIM, OpenRouter, OpenAI, Gemini, Groq, DeepSeek, Ollama and more.",
+  "keywords": [
+    "claude-code",
+    "claude",
+    "llm",
+    "ai-coding",
+    "coding-assistant",
+    "nvidia-nim",
+    "openrouter",
+    "ollama",
+    "openai",
+    "gemini",
+    "deepseek",
+    "groq",
+    "terminal",
+    "cli",
+    "tui",
+    "agents",
+    "mcp",
+    "developer-tools"
+  ],
+  "homepage": "https://github.com/PulsarOSDevTeam/pulsarcode#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PulsarOSDevTeam/pulsarcode.git",
+    "directory": "packaging/npm"
+  },
+  "license": "AGPL-3.0-or-later",
+  "author": "PulsarOS Intelligence Inc. (https://pulsaros.ca)",
+  "bin": {
+    "pulsarcode": "bin/pulsarcode.js"
+  },
+  "files": [
+    "bin/pulsarcode.js"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/pulsarcode.test.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

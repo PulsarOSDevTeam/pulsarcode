@@ -1,0 +1,93 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 PulsarOS Intelligence Inc.
+#
+# Weekly Claude Code compatibility check (Mondays, and on demand): the official Claude Code CLI
+# from npm (stable and latest channels), run headless through Pulsar Core against scripted OpenAI
+# chat-completions and Anthropic Messages providers on loopback (tools/compat/run.py), plus the
+# Stage pane plugin's own tests (pulsar/fnplug) through Claude Code's plugin test runner. No
+# secrets, no network calls beyond installing packages. compat.json is uploaded as an artifact
+# for every run. Third-party actions are pinned by full commit SHA (Dependabot keeps them current).
+
+name: compat
+
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compat-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONUTF8: '1'
+  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+  PULSAR_FX: 'off'
+  npm_config_update_notifier: 'false'
+  npm_config_audit: 'false'
+  npm_config_fund: 'false'
+
+jobs:
+  compat:
+    name: Claude Code ${{ matrix.channel }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: [stable, latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Pulsar Code dependencies
+        run: python -m pip install -r requirements.txt pytest
+
+      - name: Install Claude Code (${{ matrix.channel }} channel)
+        env:
+          CHANNEL: ${{ matrix.channel }}
+        run: |
+          npm install -g --prefix "$RUNNER_TEMP/claude" "@anthropic-ai/claude-code@$CHANNEL"
+          "$RUNNER_TEMP/claude/bin/claude" --version
+
+      - name: Run the compatibility harness
+        env:
+          CHANNEL: ${{ matrix.channel }}
+        run: |
+          python tools/compat/run.py --claude "$RUNNER_TEMP/claude/bin/claude" \
+            --channel "$CHANNEL" --out compat.json --work "$RUNNER_TEMP/compat"
+
+      - name: Stage pane plugin tests (claude plugin test pulsar/fnplug)
+        # The pane ships in every install, and its tests (pulsar/fnplug/tests) need Claude Code's own
+        # plugin test runner, which only this job installs. A build without that runner is noted.
+        env:
+          CHANNEL: ${{ matrix.channel }}
+        run: |
+          claude="$RUNNER_TEMP/claude/bin/claude"
+          home="$RUNNER_TEMP/plugin-home"
+          mkdir -p "$home"
+          if ! HOME="$home" "$claude" plugin --help 2>&1 | grep -qw test; then
+            echo "::notice::Claude Code ($CHANNEL) has no plugin test runner; the Stage pane tests did not run."
+            exit 0
+          fi
+          HOME="$home" "$claude" plugin test pulsar/fnplug
+          PATH="$RUNNER_TEMP/claude/bin:$PATH" PULSAR_OFFLINE=1 python -m pytest -q tests/test_e2e_stage.py
+
+      - name: Upload compat.json
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: compat-${{ matrix.channel }}
+          path: compat.json
+          if-no-files-found: warn
+          retention-days: 30

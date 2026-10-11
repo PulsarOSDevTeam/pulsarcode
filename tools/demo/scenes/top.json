@@ -1,0 +1,17 @@
+{
+  "alt": "Pulsar Observatory (pulsarcode top): three sessions of synthetic traffic with throughput and latency charts, provider relays, an open circuit breaker and a Stage event",
+  "title": "pulsarcode top",
+  "cols": 110,
+  "rows": 32,
+  "cmd": ["./pulsarcode", "top"],
+  "env": {"PULSAR_SEED": "4"},
+  "keys": [],
+  "duration": 9.5,
+  "fps": 4,
+  "start_at": "\u25c6 FEED",
+  "max_frames": 48,
+  "hold_last": 1.0,
+  "budget": {"svg_kb": 650, "gzip_kb": 120, "elements": 16000},
+  "demo": true,
+  "captions": [[0.2, ["end", 0.7], "synthetic traffic", "PULSAR OBSERVATORY", {"poster": true}]]
+}

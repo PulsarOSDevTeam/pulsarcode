@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pulsar Code · Run the official Claude Code CLI on any model</title>
+<meta name="description" content="Pulsar Code runs the official, unmodified Claude Code CLI on any model you hold a key for: NVIDIA NIM, OpenRouter, OpenAI, Gemini, Groq, DeepSeek, Kimi, GLM and local models through Ollama or LM Studio. A local router on 127.0.0.1, token-gated, no telemetry.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#07060b">
+<link rel="canonical" href="https://pulsarosdevteam.github.io/pulsarcode/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://pulsarosdevteam.github.io/pulsarcode/">
+<meta property="og:title" content="Pulsar Code">
+<meta property="og:description" content="Run the official Claude Code CLI on any model. An independent project, not affiliated with Anthropic. Paste a key and go. Relay, Stage, Council, Pilot. Local, token-gated, no telemetry.">
+<meta property="og:image" content="https://pulsarosdevteam.github.io/pulsarcode/assets/brand/social.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="Pulsar Code: a pulsar beside the PULSAR CODE wordmark and the line Run the official Claude Code CLI on any model">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/brand/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
+<link rel="preload" href="assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+/* Inter and JetBrains Mono, latin subsets, self-hosted (SIL OFL 1.1, see assets/fonts/): no third-party requests. */
+@font-face{font-family:Inter;font-style:normal;font-weight:400 800;font-display:swap;src:url(assets/fonts/inter-latin.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:400 700;font-display:swap;src:url(assets/fonts/jetbrains-mono-latin.woff2) format("woff2")}
+:root{
+  --bg:#07060b;--bg1:#0c0a14;--bg2:#110e1c;--line:#ffffff12;--line2:#ffffff1f;
+  --ice:#ecf6ff;--text:#d9d6ea;--ash:#9692ac;--dust:#58546c;--night:#2c283c;--chip:#13101e;
+  --ember:#ff6a00;--flare:#ff2e88;--plasma:#9d4dff;--beam:#36e2ff;--ok:#50faaa;--warn:#ffc400;--bad:#ff465a;
+  --spec:linear-gradient(90deg,#ff6a00,#ff2e88 35%,#9d4dff 70%,#36e2ff);
+  --sans:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,"DejaVu Sans Mono",monospace;
+  --settle:cubic-bezier(.16,1,.3,1);--snap:cubic-bezier(.2,0,0,1);
+  --spring:cubic-bezier(.34,1.56,.64,1);--soft:cubic-bezier(.22,1.2,.36,1);
+  color-scheme:dark;
+}
+@supports (transition-timing-function:linear(0,1)){:root{
+  --spring:linear(0,.04,.142,.279,.432,.585,.725,.847,.945,1.02,1.071,1.103,1.118,1.119,1.111,1.097,1.08,1.061,1.043,1.027,1.014,1.003,.995,.99,.987,.986,.986,.987,.989,.991,.993,1);
+  --soft:linear(0,.016,.057,.116,.187,.265,.346,.427,.506,.58,.649,.712,.768,.818,.861,.898,.929,.955,.976,.992,1.005,1.015,1.021,1.026,1.029,1.03,1.03,1.029,1.027,1.026,1.023,1)}}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:72px;-webkit-text-size-adjust:100%;background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--text);font:400 17px/1.6 var(--sans);overflow-x:clip}
+a{color:var(--beam);text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{color:var(--ice)}
+code,kbd,pre{font-family:var(--mono);font-size:.84em}
+code{color:var(--ice);background:#ffffff0d;border:1px solid var(--line);border-radius:5px;padding:.08em .38em;overflow-wrap:anywhere}
+:focus-visible{outline:2px solid var(--beam);outline-offset:3px;border-radius:4px}
+button{font:inherit;color:inherit}
+img,svg{max-width:100%}
+.wrap{max-width:1180px;margin:0 auto;padding:0 16px}
+@media (min-width:720px){.wrap{padding:0 32px}}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.skip{position:absolute;left:12px;top:-60px;z-index:60;background:var(--ice);color:var(--bg);padding:8px 14px;border-radius:8px;font-weight:600}
+.skip:focus{top:12px}
+
+/* nav */
+.top{position:sticky;top:0;z-index:40;background:#07060b;border-bottom:1px solid #ffffff0d}
+/* frosted only once the hero has scrolled away: over the animated artwork a blur would be re-rendered each frame */
+@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.top.past{background:#07060bf5;-webkit-backdrop-filter:blur(20px) saturate(140%);backdrop-filter:blur(20px) saturate(140%)}}
+.top::after{content:"";position:absolute;left:0;right:0;top:100%;height:12px;background:linear-gradient(#07060bcc,#07060b00);pointer-events:none}
+.top .wrap{display:flex;align-items:center;gap:20px;height:56px;max-width:1360px}
+.brand{display:flex;align-items:center;gap:10px;color:var(--ice);text-decoration:none;font:700 13px/1 var(--mono);letter-spacing:.2em;white-space:nowrap}
+.slot{width:28px;height:28px;flex:none;position:relative}
+.slot svg{width:28px;height:28px;display:block;opacity:0;transition:opacity .3s var(--settle)}
+.top.docked .slot svg,.nodock .slot svg{opacity:1}
+.nav{display:flex;gap:4px;margin-left:auto;overflow:auto;scrollbar-width:none}
+.nav a{color:var(--ash);text-decoration:none;font-size:14px;padding:6px 10px;border-radius:8px;white-space:nowrap;transition:color .16s var(--snap),background .16s var(--snap)}
+.nav a:hover{color:var(--ice);background:#ffffff0a}
+.nav .gh{color:var(--ice);border:1px solid var(--line2);margin-left:6px}
+@media (max-width:760px){.nav a:not(.gh):not(.k){display:none}.brand span{letter-spacing:.14em}}
+@media (max-width:379px){.nav .k{display:none}}
+.dock{position:fixed;left:0;top:0;width:28px;height:28px;z-index:41;pointer-events:none;opacity:0;display:none}
+@supports (animation-timeline:scroll()){
+  @media (prefers-reduced-motion:no-preference){
+    .dock.on{display:block;animation:dock linear both;animation-timeline:scroll(root);animation-range:0 300px}
+    .dock.on~* .slot svg{opacity:0}
+    @keyframes dock{0%{transform:translate(var(--x0),var(--y0)) scale(var(--s0));opacity:0}45%{opacity:0}
+      70%{transform:translate(var(--x0),var(--y7)) scale(var(--s0))}80%{opacity:1}100%{transform:translate(var(--x1),var(--y1)) scale(1);opacity:1}}
+  }
+}
+
+/* hero */
+.hero{position:relative;padding-bottom:40px}
+.stage{position:relative;max-width:1280px;margin:0 auto;overflow:hidden}
+.stage .hero-art{display:block;width:100%;max-width:none;height:auto;will-change:transform}
+.stage.off .hero-art{visibility:hidden}
+.hero-ro{display:none;margin:2px 0 0;font:400 12.5px/1.6 var(--mono);color:var(--ash);text-align:center;overflow-wrap:anywhere}
+.hero-ro .pf{color:var(--beam)}.hero-ro b{color:var(--ice);font-weight:400}.hero-ro .ar{color:var(--dust);padding:0 .05em}
+/* narrow screens: crop the artwork to the core, the wordmark and CODE (x 180-1230, y 56-318); the readout moves to text */
+@media (max-width:599px){.stage{aspect-ratio:1050/262}.stage .hero-art{width:121.905%;margin:-5.333% 0 0 -17.143%}.stage .fade{height:7%}
+  .hero-ro .nw{white-space:nowrap}
+  .hero-ro{display:block}.eyebrow .wide{display:none}}
+@media (min-width:1281px){.stage::before,.stage::after{content:"";position:absolute;top:0;bottom:0;width:6%;z-index:1;pointer-events:none}
+.stage::before{left:0;background:linear-gradient(90deg,var(--bg),#07060b00)}
+.stage::after{right:0;background:linear-gradient(270deg,var(--bg),#07060b00)}}
+.stage .fade{position:absolute;left:0;right:0;bottom:0;height:14%;background:linear-gradient(#07060b00,var(--bg));pointer-events:none}
+.hero-copy{position:relative;display:grid;gap:32px;margin-top:10px;justify-items:center;text-align:center}
+.hero-copy>*{min-width:0;max-width:100%}
+.hero-copy .eyebrow{justify-content:center}
+.hero-copy .lead{margin-left:auto;margin-right:auto}
+.hero-copy .facts{justify-content:center}
+.install{text-align:left;width:min(860px,100%)}
+.eyebrow{font:500 11px/1.4 var(--mono);letter-spacing:2px;text-transform:uppercase;color:var(--ash);margin:0 0 14px;display:flex;align-items:center;gap:10px;text-wrap:balance}
+.eyebrow::before{content:"";width:18px;height:2px;background:var(--spec);border-radius:2px;flex:none}
+h1{font:700 clamp(36px,6vw,72px)/1.02 var(--sans);letter-spacing:-.035em;color:var(--ice);margin:0 auto 20px;text-wrap:balance;max-width:14em}
+.indep{font-size:14px;color:var(--ash);margin:-6px 0 18px}
+.lead{font-size:18px;color:var(--text);max-width:36em;margin:0 0 22px}
+.lead strong{color:var(--ice);font-weight:600}
+.facts{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;list-style:none}
+.facts li{display:flex;align-items:center;gap:8px;font:400 13px/1 var(--mono);color:var(--text);background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:8px 12px}
+.facts i{width:6px;height:6px;border-radius:50%;background:var(--c)}
+
+/* panels, install */
+.panel{background:linear-gradient(#ffffff06,#ffffff02);border:1px solid var(--line);border-radius:14px}
+.install{padding:16px}
+.tabs{display:flex;gap:4px;margin-bottom:12px}
+.tab{background:none;border:1px solid transparent;color:var(--ash);font:500 13px/1 var(--sans);padding:8px 12px;border-radius:8px;cursor:pointer;transition:color .16s var(--snap),background .16s var(--snap),border-color .16s var(--snap)}
+.tab[aria-selected="true"]{color:var(--ice);background:#ffffff0c;border-color:var(--line2)}
+.cmd{display:flex;align-items:center;gap:10px;background:#05040a;border:1px solid var(--line);border-radius:10px;padding:12px 12px 12px 14px}
+.cmd pre{margin:0;flex:1;min-width:0;overflow:auto;scrollbar-width:thin;color:var(--ice);font-size:13.5px;line-height:1.5}
+.cmd pre .p{color:var(--ash);user-select:none}
+.copy{flex:none;background:var(--ice);color:var(--bg);border:0;border-radius:8px;font:600 13px/1 var(--sans);padding:9px 14px;cursor:pointer;transition:transform .16s var(--snap),background .16s var(--snap)}
+.copy:hover{background:#fff}.copy:active{transform:scale(.96)}
+.copy.ok{background:var(--ok)}
+.pin{margin:14px 2px 0;font-size:14px;line-height:1.55;color:var(--ash)}
+.pin p{margin:0 0 10px}
+.pin pre{margin:6px 0 10px;background:#05040a;border:1px solid var(--line);border-radius:10px;padding:10px 12px;overflow:auto;color:var(--text);font-size:12.5px}
+.senses{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;align-items:center}
+.tog{display:inline-flex;align-items:center;gap:8px;background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:7px 12px 7px 9px;font:500 13px/1 var(--sans);color:var(--ash);cursor:pointer;transition:color .16s var(--snap),border-color .16s var(--snap)}
+.tog::before{content:"";width:22px;height:12px;border-radius:999px;background:var(--night);box-shadow:inset 0 0 0 1px #ffffff18;transition:background .16s var(--snap)}
+.tog[aria-pressed="true"]{color:var(--ice);border-color:var(--line2)}
+.tog[aria-pressed="true"]::before{background:linear-gradient(90deg,var(--plasma),var(--beam))}
+.senses small{color:var(--ash);font-size:12px}
+
+/* sections */
+section{position:relative}
+.sec{padding:112px 0 0}
+@media (max-width:720px){.sec{padding-top:80px}}
+.head{margin-bottom:36px}
+.head .sub{max-width:40em}
+@media (min-width:1040px){.head.two{display:grid;grid-template-columns:1fr 1fr;column-gap:56px;align-items:end}.head.two .eyebrow{grid-column:1/-1}.head.two h2{margin:0}}
+h2{font:700 clamp(30px,4.2vw,46px)/1.08 var(--sans);letter-spacing:-.03em;margin:0 0 14px;color:var(--ice);text-wrap:balance}
+.glint{background:linear-gradient(100deg,var(--ice) 40%,#ff6a00 44%,#ff2e88 47%,#9d4dff 50%,#36e2ff 53%,var(--ice) 57%) 100% 0/300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent}
+.glint.in{background-position:0 0;transition:background-position .6s var(--settle)}
+.sub{color:var(--ash);font-size:17px;margin:0;max-width:44em}
+h3{font:650 19px/1.3 var(--sans);color:var(--ice);margin:0 0 8px;letter-spacing:-.01em}
+.rise>*{opacity:0;transform:translateY(24px)}
+.rise.in>*{opacity:1;transform:none;transition:opacity .4s var(--settle),transform .52s var(--soft);transition-delay:calc(var(--i,0)*60ms)}
+
+/* uplink */
+.uplink{display:grid;gap:18px}
+.console{padding:18px;display:grid;gap:14px}
+@media (min-width:980px){.console{grid-template-columns:minmax(320px,400px) 1fr;column-gap:28px}.console .presets{grid-column:1/-1}}
+.field label{display:block;font:500 11px/1 var(--mono);letter-spacing:2px;text-transform:uppercase;color:var(--ash);margin-bottom:10px}
+.keybox{display:flex;align-items:center;gap:10px;background:#05040a;border:1px solid var(--line2);border-radius:10px;padding:0 12px;transition:border-color .16s var(--snap),box-shadow .16s var(--snap)}
+.keybox:focus-within{border-color:#36e2ff80;box-shadow:0 0 0 3px #36e2ff1a}
+.keybox::before{content:"›";color:var(--dust);font:400 18px/1 var(--mono)}
+#key{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--ice);font:400 17px/1 var(--mono);padding:14px 0;letter-spacing:.04em}
+#key::placeholder{color:var(--ash)}
+.note{font-size:13px;color:var(--ash);margin:10px 0 0;line-height:1.5}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.chipb{background:var(--chip);border:1px solid var(--line);border-radius:8px;color:var(--text);font:400 12.5px/1 var(--mono);padding:8px 10px;cursor:pointer;transition:border-color .16s var(--snap),color .16s var(--snap),transform .16s var(--snap)}
+.chipb:hover{border-color:var(--line2);color:var(--ice)}
+.chipb:active{transform:translateY(1px)}
+.chipb.fake{color:var(--warn)}
+.readout{min-height:96px;border-left:1px solid var(--line);padding-left:28px;display:flex;flex-direction:column;justify-content:center}
+@media (max-width:979px){.readout{border-left:0;padding-left:0;border-top:1px solid var(--line);padding-top:14px}}
+.ro-k{font:500 11px/1 var(--mono);letter-spacing:2px;text-transform:uppercase;color:var(--ash);margin-bottom:12px}
+.ro{font:400 16px/1.7 var(--mono);color:var(--ash);overflow-wrap:anywhere;margin:0}
+.ro b{color:var(--ice);font-weight:700}
+.ro .pf{color:var(--rc,var(--beam))}
+.ro .ar{color:var(--dust);padding:0 .1em}
+.ro .bad{color:var(--bad)}
+.ro .why{display:block;font:400 14px/1.5 var(--sans);color:var(--ash);margin-top:6px}
+.sky-frame{position:relative;overflow:hidden;border-radius:14px;border:1px solid var(--line);background:var(--bg);margin:0}
+.sky-frame .console{border-bottom:1px solid var(--line);background:linear-gradient(#ffffff07,#ffffff03)}
+.sky-frame .cam{will-change:transform}
+.const-art{display:block;width:100%;height:auto}
+.const-art .lk{fill:none;stroke-width:1.5;stroke-linecap:round}
+.const-art .hl{fill:none;stroke-width:1.2;opacity:0}
+.cap{font-size:13px;color:var(--ash);margin:10px 2px 0}
+.panhint{display:none}
+@media (max-width:720px){.sky-frame{margin:0 -16px;border-radius:0;border-left:0;border-right:0}
+  .pan{overflow-x:auto;scrollbar-width:none;overscroll-behavior-x:contain;--fl:28px;--fr:28px;
+    -webkit-mask-image:linear-gradient(90deg,#0000,#000 var(--fl),#000 calc(100% - var(--fr)),#0000);mask-image:linear-gradient(90deg,#0000,#000 var(--fl),#000 calc(100% - var(--fr)),#0000)}
+  .pan::-webkit-scrollbar{display:none}.pan[data-at="start"]{--fl:0px}.pan[data-at="end"]{--fr:0px}.pan[data-at="none"]{--fl:0px;--fr:0px}
+  .pan .const-art,.pan.sig img{min-width:760px}
+  .panhint{display:flex;align-items:center;justify-content:center;gap:8px;margin:10px 0 0;font:500 11px/1 var(--mono);letter-spacing:2px;text-transform:uppercase;color:var(--ash)}
+  .panhint::before,.panhint::after{content:"";width:14px;height:1px;background:var(--dust)}}
+
+/* signal */
+.sig img{display:block;width:100%;height:auto}
+.steps{counter-reset:s;list-style:none;padding:0;margin:28px 0 0;display:grid;gap:12px}
+@media (min-width:900px){.steps{grid-template-columns:repeat(3,1fr)}}
+.steps li{counter-increment:s;padding:16px 18px;font-size:15px;color:var(--text)}
+.steps li::before{content:"0" counter(s);display:block;font:500 11px/1 var(--mono);letter-spacing:2px;color:var(--ash);margin-bottom:10px}
+.grid3{display:grid;gap:12px;margin-top:12px}
+@media (min-width:720px){.grid3{grid-template-columns:repeat(2,1fr)}}
+@media (min-width:1040px){.grid3{grid-template-columns:repeat(3,1fr)}}
+.fact{padding:18px}
+.fact p{margin:0;font-size:15px;color:var(--ash)}
+
+/* replay player */
+.player{padding:0;overflow:hidden}
+.ptabs{display:flex;gap:2px;padding:10px;border-bottom:1px solid var(--line);overflow:auto;scrollbar-width:none}
+.ptabs .tab{font-family:var(--mono);font-size:12.5px}
+.screen{position:relative;background:var(--bg);padding:12px}
+.screen canvas,.screen img{display:block;width:100%;height:auto}
+.screen canvas{position:absolute;left:12px;top:12px;width:calc(100% - 24px);height:calc(100% - 24px);object-fit:contain;opacity:0;transition:opacity .2s var(--settle)}
+.screen.live canvas{opacity:1}
+.screen::after{content:"";position:absolute;inset:12px;background:linear-gradient(#07060b00 55%,#07060b99);pointer-events:none;transition:opacity .2s var(--settle)}
+.screen.live::after{opacity:0}
+.bigplay{position:absolute;left:32px;bottom:32px;z-index:1;display:flex;align-items:center;gap:10px;height:40px;padding:0 16px 0 14px;border-radius:999px;border:1px solid var(--line2);background:#13101ef0;color:var(--ice);font:600 14px/1 var(--sans);cursor:pointer;box-shadow:0 6px 24px #0008;transition:transform .16s var(--snap),opacity .2s var(--settle),border-color .16s var(--snap)}
+.bigplay:hover{transform:translateY(-1px);border-color:#36e2ff66}
+.bigplay::before{content:"";border-left:11px solid var(--ice);border-top:7px solid transparent;border-bottom:7px solid transparent}
+@media (max-width:600px){.bigplay{left:18px;bottom:18px;height:30px;padding:0 12px 0 10px;gap:8px;font-size:12px}.bigplay::before{border-left-width:9px;border-top-width:6px;border-bottom-width:6px}}
+.screen.live .bigplay{opacity:0;pointer-events:none}
+.ctl{display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid var(--line);flex-wrap:wrap}
+.ib{background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:500 12.5px/1 var(--mono);color:var(--text);cursor:pointer;min-width:36px;transition:border-color .16s var(--snap),color .16s var(--snap)}
+.ib:hover{border-color:var(--line2);color:var(--ice)}
+.ib[aria-pressed="true"]{color:var(--ice);border-color:#36e2ff66}
+.scrub{position:relative;flex:1 1 220px;min-width:160px;height:28px;display:flex;align-items:center}
+.scrub input{width:100%;margin:0;accent-color:var(--beam);background:none}
+.ticks{position:absolute;left:8px;right:8px;top:2px;height:5px;pointer-events:none}
+.ticks i{position:absolute;top:0;width:2px;height:5px;margin-left:-1px;background:var(--plasma);border-radius:1px}
+.tc{font:500 12.5px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--ash);min-width:84px;text-align:right}
+.spd{display:flex;gap:2px}
+.alt{font-size:13.5px;color:var(--ash);margin:12px 2px 0}
+
+/* extras */
+.cards{display:grid;gap:16px}
+@media (min-width:900px){.cards{grid-template-columns:repeat(3,1fr)}}
+.card{padding:0;overflow:hidden;display:flex;flex-direction:column}
+.card img{display:block;width:100%;height:auto;aspect-ratio:600/340;background:var(--bg)}
+.card div{padding:16px 18px 18px}
+.card p{margin:0;font-size:15px;color:var(--ash)}
+.pilot{margin-top:16px;display:grid;gap:20px;padding:18px}
+@media (min-width:980px){.pilot{grid-template-columns:.8fr 1.2fr;align-items:center;padding:28px}}
+.pilot ul{margin:12px 0 0;padding:0 0 0 18px;color:var(--ash);font-size:15px}
+.pilot li{margin:4px 0}
+.sandbox{position:relative;border-radius:12px;border:1px solid var(--line2);background:#0b0914;overflow:hidden;user-select:none;cursor:default;touch-action:manipulation}
+.sandbox .bar{display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;background:#0f0d18;border-bottom:1px solid #ffffff0f;font:400 12px/1 var(--mono);color:var(--ash)}
+.sandbox .bar b{margin-left:auto;font-weight:500;color:var(--ash);letter-spacing:1px;font-size:10.5px}
+.mock{padding:20px 22px 22px;display:grid;gap:14px}
+.mock .lbl{font:400 12px/1 var(--mono);color:var(--ash);margin-bottom:6px}
+.mock .fld{height:38px;border:1px solid var(--line2);border-radius:8px;background:#06050b;display:flex;align-items:center;padding:0 12px;font:400 13px/1 var(--mono);color:var(--ash)}
+.mock .row{display:flex;gap:8px;flex-wrap:wrap}
+.mb{background:#1a1726;border:1px solid #ffffff14;border-radius:8px;color:var(--text);font:500 13px/1 var(--mono);padding:10px 14px;cursor:default}
+.mb.pri{background:#5b2fb0;border-color:#9d4dff66;color:#fff}
+.mock .end{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+.sandbox canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.sbcap{font-size:13px;color:var(--ash);margin:10px 2px 0}
+
+/* privacy, faq, tables */
+.tbl{width:100%;border-collapse:collapse;font-size:15px}
+.tbl th,.tbl td{text-align:left;vertical-align:top;padding:14px 16px;border-top:1px solid var(--line)}
+.tbl thead th{font:500 11px/1 var(--mono);letter-spacing:2px;text-transform:uppercase;color:var(--ash);border-top:0}
+.tbl tbody th{color:var(--ice);font-weight:600;width:28%}
+.tbl td{color:var(--text)}
+@media (max-width:720px){.tbl,.tbl tbody,.tbl tr,.tbl th,.tbl td{display:block;width:auto}.tbl thead{display:none}.tbl tbody th{border-top:1px solid var(--line);padding-bottom:4px}.tbl td{border-top:0;padding-top:0}.tbl tbody th{width:auto}}
+.tablewrap{padding:4px 0}
+.honest{color:var(--ash);font-size:15px;margin:16px 2px 0}
+.faq details{border-top:1px solid var(--line)}
+.faq details:last-child{border-bottom:1px solid var(--line)}
+.faq summary{cursor:pointer;list-style:none;padding:18px 36px 18px 0;position:relative;font:600 17px/1.4 var(--sans);color:var(--ice)}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";position:absolute;right:4px;top:16px;font:400 22px/1 var(--mono);color:var(--ash);transition:transform .16s var(--snap)}
+.faq details[open] summary::after{transform:rotate(45deg)}
+.faq .a{padding:0 0 18px;color:var(--text);font-size:16px;max-width:52em}
+.faq .a p{margin:0 0 10px}
+.faq .a ul,.faq .a ol{margin:0 0 10px;padding-left:20px}.plist li{margin:6px 0}.plist .count{color:var(--ash);font:500 12px/1 var(--mono)}
+.gal{display:grid;gap:12px;margin-top:14px}
+@media (min-width:720px){.gal{grid-template-columns:repeat(3,1fr)}}
+.gal figure{margin:0}.gal img{display:block;width:100%;height:auto;border-radius:10px;border:1px solid var(--line)}
+.gal figcaption{font-size:13px;color:var(--ash);margin-top:6px}
+
+footer{margin-top:120px;border-top:1px solid #ffffff0d;padding:40px 0 56px;color:var(--ash);font-size:14px}
+.fgrid{display:flex;flex-wrap:wrap;gap:24px;justify-content:space-between;align-items:flex-start}
+.fl{display:flex;flex-wrap:wrap;gap:6px 18px}
+.fl a{color:var(--ash);text-decoration:none}.fl a:hover{color:var(--ice)}
+.disc{margin:28px 0 0;font-size:13px;line-height:1.6;color:var(--ash);max-width:62em}
+.fmark{display:flex;align-items:center;gap:10px;color:var(--ice);font:700 13px/1 var(--mono);letter-spacing:.2em}
+.fmark svg{width:28px;height:28px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,16px);opacity:0;background:var(--chip);border:1px solid var(--line2);color:var(--ice);font-size:14px;padding:10px 16px;border-radius:10px;z-index:50;pointer-events:none;transition:opacity .2s var(--settle),transform .3s var(--soft)}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{transition-duration:0s!important;animation-delay:0s!important}
+  .rise>*{opacity:1;transform:none}
+  .glint{background:none;color:var(--ice)}
+  .slot svg{opacity:1}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<!-- mark:begin --><svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="pm" viewBox="0 0 64 64"><defs><radialGradient id="pm-mg"><stop offset="0" stop-color="#ECF6FF" stop-opacity=".85"/><stop offset=".45" stop-color="#36E2FF" stop-opacity=".28"/><stop offset="1" stop-color="#9D4DFF" stop-opacity="0"/></radialGradient><linearGradient id="pm-mn" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="-30"><stop offset="0" stop-color="#ECF6FF"/><stop offset=".35" stop-color="#36E2FF"/><stop offset="1" stop-color="#36E2FF" stop-opacity=".2"/></linearGradient><linearGradient id="pm-ms" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="30"><stop offset="0" stop-color="#ECF6FF"/><stop offset=".35" stop-color="#9D4DFF"/><stop offset="1" stop-color="#9D4DFF" stop-opacity=".2"/></linearGradient><linearGradient id="pm-mr" gradientUnits="userSpaceOnUse" x1="-22" y1="0" x2="22" y2="0"><stop offset="0" stop-color="#FF6A00"/><stop offset=".35" stop-color="#FF2E88"/><stop offset=".7" stop-color="#9D4DFF"/><stop offset="1" stop-color="#36E2FF"/></linearGradient></defs><circle cx="32" cy="32" r="20" fill="url(#pm-mg)"/><g transform="translate(32 32) rotate(110.05)" fill="none" stroke="url(#pm-mr)" stroke-width="2"><path d="M-22 0A22 9.24 0 0 1 22 0"/></g><g transform="translate(32 32) rotate(110.05)"><path d="M-7 0L-.5 -30H.5L7 0Z" fill="url(#pm-mn)"/><path d="M-7 0L-.5 30H.5L7 0Z" fill="url(#pm-ms)"/></g><g transform="translate(32 32) rotate(110.05)" fill="none" stroke="url(#pm-mr)" stroke-width="2"><path d="M-22 0A22 9.24 0 0 0 22 0"/></g><circle cx="32" cy="32" r="7" fill="#ECF6FF"/></symbol></svg><!-- mark:end -->
+<div class="dock" aria-hidden="true"><svg width="28" height="28"><use href="#pm"/></svg></div>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Pulsar Code, back to top"><span class="slot"><svg aria-hidden="true"><use href="#pm"/></svg></span><span>PULSAR CODE</span></a>
+    <nav class="nav" aria-label="Sections">
+      <a class="k" href="#install">Install</a><a href="#uplink">Uplink</a><a href="#replays">Replays</a><a href="#extras">Extras</a><a href="#privacy">Privacy</a><a href="#faq">FAQ</a>
+      <a class="gh" href="https://github.com/PulsarOSDevTeam/pulsarcode">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+<section class="hero" id="top" aria-labelledby="hero-h">
+  <div class="stage">
+<!-- hero:begin --><picture><source media="(prefers-reduced-motion: reduce)" srcset="assets/brand/hero-static-dark.v3.svg"><img class="hero-art" src="assets/brand/hero-inline-dark.svg" width="1280" height="440" fetchpriority="high" decoding="async" alt="Pulsar Code: a pulsar ignites and lights the PULSAR CODE wordmark; a readout shows a masked key prefix (or a local engine&#x27;s name) detected as its provider and routed through Pulsar Core on 127.0.0.1"></picture><!-- hero:end -->
+    <div class="fade"></div>
+  </div>
+  <p class="wrap hero-ro"><span class="nw"><span class="pf">sk-or-••••••••</span><span class="ar"> → </span><b>OpenRouter</b> ·</span> <span class="nw">adapter · chat wire<span class="ar"> → </span></span> <span class="nw">Pulsar Core 127.0.0.1</span></p>
+  <div class="wrap hero-copy">
+    <div>
+      <p class="eyebrow">v3.0.0 · <span class="wide">open source · </span>AGPL-3.0-or-later</p>
+      <h1 id="hero-h">Run the official Claude Code CLI on any model</h1>
+      <p class="indep">Independent project, not affiliated with or endorsed by Anthropic.</p>
+      <p class="lead">Paste an API key from NVIDIA NIM, OpenRouter, OpenAI, Gemini, Groq,
+        DeepSeek, Kimi, GLM, xAI, Mistral, Anthropic, a local Ollama, or any compatible URL. Pulsar Code recognises the provider, lets you pick
+        a model and starts <strong>Claude Code, unmodified</strong>, with your project's skills, hooks and MCP servers still working.</p>
+      <ul class="facts" aria-label="At a glance">
+        <li><i style="--c:var(--beam)"></i><span data-count="total">36</span> providers in v3.0.0</li>
+        <li><i style="--c:var(--plasma)"></i>router on 127.0.0.1, token-gated</li>
+        <li><i style="--c:var(--flare)"></i>no telemetry</li>
+        <li><i style="--c:var(--ember)"></i>macOS · Linux · WSL · Windows</li>
+      </ul>
+    </div>
+    <div class="panel install" id="install">
+      <div class="tabs" role="tablist" aria-label="Install command for your system">
+        <button class="tab" role="tab" id="t-nix" aria-controls="cmd" aria-selected="true" data-os="nix">macOS · Linux · WSL</button>
+        <button class="tab" role="tab" id="t-win" aria-controls="cmd" aria-selected="false" tabindex="-1" data-os="win">Windows</button>
+      </div>
+      <div class="cmd" id="cmd" role="tabpanel" aria-labelledby="t-nix">
+        <pre><code id="cmdtext" style="all:unset;white-space:pre"><span class="p">$ </span>curl -fsSL https://raw.githubusercontent.com/PulsarOSDevTeam/pulsarcode/main/install.sh | bash</code></pre>
+        <button class="copy" id="copy" type="button">Copy</button>
+      </div>
+      <div class="pin">
+        <p>From the first public release, pin a checksum-checked release instead: set <code>PULSAR_REF=v3.0.0</code> and fetch the installer
+          from the same tag. Release archives are checked against the release's <code>SHA256SUMS</code> before anything is unpacked; releases
+          published while the repository is public also carry build provenance you can check with <code>gh attestation verify</code>.
+          Pulsar Code's Python dependencies come from PyPI.</p>
+        <pre id="pintext">curl -fsSL https://raw.githubusercontent.com/PulsarOSDevTeam/pulsarcode/v3.0.0/install.sh | PULSAR_REF=v3.0.0 bash</pre>
+        <p>Package channels (pipx, uv, Homebrew, Scoop and npm) are coming with the first public release. The installer brings a private
+          Python runtime when yours is missing and installs Claude Code with Anthropic's own installer if it is not there yet.</p>
+      </div>
+      <div class="senses">
+        <button class="tog" type="button" id="listen" aria-pressed="false">Listen</button>
+        <button class="tog" type="button" id="haptics" aria-pressed="false" hidden>Haptics</button>
+        <small>Off by default. Listen clicks on each main pulse, like a radio telescope.</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="uplink" aria-labelledby="up-h">
+  <div class="wrap">
+    <div class="head two">
+      <p class="eyebrow">Uplink · runs in your browser</p>
+      <h2 id="up-h" class="glint">The beam finds your provider</h2>
+      <p class="sub">Pulsar Code recognises a key by its shape, offline, longest prefix first. This page carries the same prefix table
+        as the CLI: type a prefix or pick one, and the beam swings to the profile it belongs to.</p>
+    </div>
+    <figure class="sky-frame" id="const">
+      <div class="console">
+        <div class="field">
+          <label for="key">Key prefix</label>
+          <div class="keybox"><input id="key" type="text" maxlength="12" autocomplete="off" spellcheck="false" autocapitalize="off" autocorrect="off" inputmode="text" placeholder="sk-or-" aria-describedby="keynote"></div>
+          <p class="note" id="keynote">Matched in your browser. Nothing is sent or stored. Please don't paste a real key: the first 12 characters are enough.</p>
+        </div>
+        <div class="readout">
+          <div class="ro-k">Readout</div>
+          <p class="ro" id="readout" aria-live="polite">Waiting for a prefix. Try <b>sk-or-</b> or the fake key.</p>
+        </div>
+          <div class="presets" role="group" aria-label="Example prefixes">
+            <button class="chipb" type="button" data-k="sk-or-">sk-or-</button><button class="chipb" type="button" data-k="nvapi-">nvapi-</button><button class="chipb" type="button" data-k="gsk_">gsk_</button><button class="chipb" type="button" data-k="sk-ant-api">sk-ant-api</button><button class="chipb" type="button" data-k="AIza">AIza</button><button class="chipb" type="button" data-k="xai-">xai-</button><button class="chipb" type="button" data-k="hf_">hf_</button><button class="chipb" type="button" data-k="sk-">sk-</button><button class="chipb" type="button" data-k="localhost">localhost</button><button class="chipb fake" type="button" data-k="sk-or-v1-fake-key-not-real">sk-or-v1-fake-key-not-real</button>
+          </div>
+      </div>
+        <div class="pan" id="cpan" tabindex="0" role="region" aria-label="Provider constellation, scrolls sideways"><div class="cam">
+<!-- constellation:begin --><svg class="const-art" focusable="false" xmlns="http://www.w3.org/2000/svg" width="1280" height="520" viewBox="0 0 1280 520" role="img" aria-label="Provider constellation: 36 provider profiles on four orbits around Pulsar Core: local 6, native 6, cloud 2, adapters 22; a beam sweeps at the terminal&#x27;s speed and each name lights as it passes"><title>Provider constellation</title><style>text{font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif}.c-m{font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,"DejaVu Sans Mono",monospace}.c-beam{rotate:20.054deg}.c-nd{transform-box:fill-box;transform-origin:50% 50%}.c-nl{fill:#9692AC}</style><defs><radialGradient id="c-neb" gradientUnits="userSpaceOnUse" cx="640" cy="250" r="520"><stop offset="0" stop-color="#2A0F4A" stop-opacity=".8"/><stop offset=".5" stop-color="#150A2A" stop-opacity=".45"/><stop offset="1" stop-color="#150A2A" stop-opacity="0"/></radialGradient><mask id="c-om" maskUnits="userSpaceOnUse" x="0" y="0" width="1280" height="520"><rect x="0" y="0" width="1280" height="520" fill="#FFFFFF"/><rect x="728.16" y="270.41" width="42.5" height="14" rx="3" fill="#000000"/><rect x="797.03" y="288.52" width="49.4" height="14" rx="3" fill="#000000"/><rect x="867.24" y="305.24" width="42.5" height="14" rx="3" fill="#000000"/><rect x="934.77" y="324.75" width="63.2" height="14" rx="3" fill="#000000"/></mask><linearGradient id="c-cb" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="430" y2="0"><stop offset="0" stop-color="#ECF6FF"/><stop offset=".12" stop-color="#36E2FF" stop-opacity=".8"/><stop offset=".6" stop-color="#9D4DFF" stop-opacity=".25"/><stop offset="1" stop-color="#9D4DFF" stop-opacity="0"/></linearGradient><radialGradient id="c-cg"><stop offset="0" stop-color="#ECF6FF" stop-opacity=".9"/><stop offset=".35" stop-color="#36E2FF" stop-opacity=".3"/><stop offset="1" stop-color="#9D4DFF" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="1280" height="520" fill="#07060B"/><rect x="0" y="0" width="1280" height="520" fill="url(#c-neb)"/><g mask="url(#c-om)" fill="none" stroke="#58546C" stroke-opacity=".55" stroke-dasharray="2 6"><ellipse cx="640" cy="250" rx="118" ry="73.16"/><ellipse cx="640" cy="250" rx="196" ry="121.52"/><ellipse cx="640" cy="250" rx="268" ry="166.16"/><ellipse cx="640" cy="250" rx="352" ry="218.24"/></g><text x="750.16" y="280.61" font-size="9" letter-spacing="1.5" fill="#9692AC" class="c-m" text-anchor="middle">LOCAL</text><text x="822.48" y="298.72" font-size="9" letter-spacing="1.5" fill="#9692AC" class="c-m" text-anchor="middle">NATIVE</text><text x="889.24" y="315.44" font-size="9" letter-spacing="1.5" fill="#9692AC" class="c-m" text-anchor="middle">CLOUD</text><text x="967.12" y="334.95" font-size="9" letter-spacing="1.5" fill="#9692AC" class="c-m" text-anchor="middle">ADAPTERS</text><g transform="translate(640 250)" style="mix-blend-mode:screen;opacity:1"><g class="c-beam"><path d="M0 0L430 -143L430 143Z" fill="url(#c-cb)" opacity=".1"/><path d="M0 0L430 -143L430 143Z" fill="url(#c-cb)" opacity=".07" transform="scale(-1 1)"/><path d="M0 0L430 -66L430 66Z" fill="url(#c-cb)" opacity=".18"/><path d="M0 0L430 -66L430 66Z" fill="url(#c-cb)" opacity=".13" transform="scale(-1 1)"/><path d="M0 0L430 -25.3L430 25.3Z" fill="url(#c-cb)" opacity=".35"/><path d="M0 0L430 -25.3L430 25.3Z" fill="url(#c-cb)" opacity=".24" transform="scale(-1 1)"/><path d="M0 0L430 -6.6L430 6.6Z" fill="url(#c-cb)" opacity=".9"/><path d="M0 0L430 -6.6L430 6.6Z" fill="url(#c-cb)" opacity=".63" transform="scale(-1 1)"/></g></g><g class="c-node" data-id="ollama" data-angle="312.96"><circle cx="699" cy="186.64" r="3.2" fill="#FF2E88" class="c-nd"/><text x="708" y="188.64" font-size="12" class="c-nl">Ollama</text></g><g class="c-node" data-id="lmstudio" data-angle="0"><circle cx="758" cy="250" r="3.2" fill="#FF2E88" class="c-nd"/><text x="767" y="238" font-size="12" class="c-nl">LM Studio</text></g><g class="c-node" data-id="llamacpp" data-angle="47.04"><circle cx="699" cy="313.36" r="3.2" fill="#FF2E88" class="c-nd"/><text x="708" y="315.36" font-size="12" class="c-nl">llama.cpp</text></g><g class="c-node" data-id="vllm" data-angle="132.96"><circle cx="581" cy="313.36" r="3.2" fill="#FF2E88" class="c-nd"/><text x="572" y="315.36" font-size="12" class="c-nl" text-anchor="end">vLLM</text></g><g class="c-node" data-id="jan" data-angle="180"><circle cx="522" cy="250" r="3.2" fill="#FF2E88" class="c-nd"/><text x="513" y="252" font-size="12" class="c-nl" text-anchor="end">Jan</text></g><g class="c-node" data-id="localai" data-angle="227.04"><circle cx="581" cy="186.64" r="3.2" fill="#FF2E88" class="c-nd"/><text x="572" y="188.64" font-size="12" class="c-nl" text-anchor="end">LocalAI</text></g><g class="c-node" data-id="anthropic" data-angle="350.57"><circle cx="829.32" cy="218.55" r="3.2" fill="#9D4DFF" class="c-nd"/><text x="838.32" y="220.55" font-size="12" class="c-nl">Anthropic</text></g><g class="c-node" data-id="deepseek" data-angle="31.8"><circle cx="778.59" cy="335.93" r="3.2" fill="#9D4DFF" class="c-nd"/><text x="787.59" y="337.93" font-size="12" class="c-nl">DeepSeek</text></g><g class="c-node" data-id="moonshot" data-angle="113.37"><circle cx="589.27" cy="367.38" r="3.2" fill="#9D4DFF" class="c-nd"/><text x="589.27" y="386.38" font-size="12" class="c-nl" text-anchor="middle">Moonshot Kimi</text></g><g class="c-node" data-id="zai" data-angle="170.57"><circle cx="450.68" cy="281.45" r="3.2" fill="#9D4DFF" class="c-nd"/><text x="441.68" y="283.45" font-size="12" class="c-nl" text-anchor="end">Z.ai GLM</text></g><g class="c-node" data-id="minimax" data-angle="211.8"><circle cx="501.41" cy="164.07" r="3.2" fill="#9D4DFF" class="c-nd"/><text x="492.41" y="166.07" font-size="12" class="c-nl" text-anchor="end">MiniMax</text></g><g class="c-node" data-id="foundry" data-angle="293.37"><circle cx="690.73" cy="132.62" r="3.2" fill="#9D4DFF" class="c-nd"/><text x="690.73" y="121.62" font-size="12" class="c-nl" text-anchor="middle">Azure AI Foundry (Claude)</text></g><g class="c-node" data-id="bedrock" data-angle="23.47"><circle cx="859.53" cy="345.31" r="3.2" fill="#FF6A00" class="c-nd"/><text x="850.53" y="361.31" font-size="12" class="c-nl" text-anchor="end">Amazon Bedrock</text></g><g class="c-node" data-id="vertex" data-angle="203.47"><circle cx="420.47" cy="154.69" r="3.2" fill="#FF6A00" class="c-nd"/><text x="411.47" y="170.69" font-size="12" class="c-nl" text-anchor="end">Google Vertex AI</text></g><g class="c-node" data-id="nvidia" data-angle="279.62"><circle cx="676.79" cy="32.96" r="3.2" fill="#36E2FF" class="c-nd"/><text x="676.79" y="51.96" font-size="12" class="c-nl" text-anchor="middle">NVIDIA NIM</text></g><g class="c-node" data-id="openrouter" data-angle="303.57"><circle cx="773.93" cy="48.17" r="3.2" fill="#36E2FF" class="c-nd"/><text x="782.93" y="64.17" font-size="12" class="c-nl">OpenRouter</text></g><g class="c-node" data-id="openai" data-angle="322.29"><circle cx="860.22" cy="79.74" r="3.2" fill="#36E2FF" class="c-nd"/><text x="869.22" y="81.74" font-size="12" class="c-nl">OpenAI</text></g><g class="c-node" data-id="gemini" data-angle="336.6"><circle cx="928.66" cy="125.11" r="3.2" fill="#36E2FF" class="c-nd"/><text x="937.66" y="127.11" font-size="12" class="c-nl">Google Gemini</text></g><g class="c-node" data-id="groq" data-angle="348.25"><circle cx="973.72" cy="180.59" r="3.2" fill="#36E2FF" class="c-nd"/><text x="982.72" y="182.59" font-size="12" class="c-nl">Groq</text></g><g class="c-node" data-id="xai" data-angle="358.65"><circle cx="991.74" cy="241.69" r="3.2" fill="#36E2FF" class="c-nd"/><text x="1000.74" y="243.69" font-size="12" class="c-nl">xAI</text></g><g class="c-node" data-id="mistral" data-angle="8.9"><circle cx="981.27" cy="303.47" r="3.2" fill="#36E2FF" class="c-nd"/><text x="990.27" y="305.47" font-size="12" class="c-nl">Mistral</text></g><g class="c-node" data-id="cerebras" data-angle="20.1"><circle cx="943.15" cy="360.91" r="3.2" fill="#36E2FF" class="c-nd"/><text x="952.15" y="376.91" font-size="12" class="c-nl">Cerebras</text></g><g class="c-node" data-id="together" data-angle="33.53"><circle cx="880.47" cy="409.37" r="3.2" fill="#36E2FF" class="c-nd"/><text x="889.47" y="411.37" font-size="12" class="c-nl">Together AI</text></g><g class="c-node" data-id="fireworks" data-angle="50.92"><circle cx="798.31" cy="444.92" r="3.2" fill="#36E2FF" class="c-nd"/><text x="807.31" y="446.92" font-size="12" class="c-nl">Fireworks AI</text></g><g class="c-node" data-id="huggingface" data-angle="73.57"><circle cx="703.32" cy="464.68" r="3.2" fill="#36E2FF" class="c-nd"/><text x="734.12" y="483.68" font-size="12" class="c-nl" text-anchor="middle">Hugging Face</text></g><g class="c-node" data-id="deepinfra" data-angle="99.62"><circle cx="603.21" cy="467.04" r="3.2" fill="#36E2FF" class="c-nd"/><text x="603.21" y="456.04" font-size="12" class="c-nl" text-anchor="middle">DeepInfra</text></g><g class="c-node" data-id="sambanova" data-angle="123.57"><circle cx="506.07" cy="451.83" r="3.2" fill="#36E2FF" class="c-nd"/><text x="497.07" y="453.83" font-size="12" class="c-nl" text-anchor="end">SambaNova</text></g><g class="c-node" data-id="vercel" data-angle="142.29"><circle cx="419.78" cy="420.26" r="3.2" fill="#36E2FF" class="c-nd"/><text x="410.78" y="422.26" font-size="12" class="c-nl" text-anchor="end">Vercel AI Gateway</text></g><g class="c-node" data-id="requesty" data-angle="156.6"><circle cx="351.34" cy="374.89" r="3.2" fill="#36E2FF" class="c-nd"/><text x="342.34" y="376.89" font-size="12" class="c-nl" text-anchor="end">Requesty</text></g><g class="c-node" data-id="novita" data-angle="168.25"><circle cx="306.28" cy="319.41" r="3.2" fill="#36E2FF" class="c-nd"/><text x="297.28" y="321.41" font-size="12" class="c-nl" text-anchor="end">Novita AI</text></g><g class="c-node" data-id="dashscope" data-angle="178.65"><circle cx="288.26" cy="258.31" r="3.2" fill="#36E2FF" class="c-nd"/><text x="279.26" y="260.31" font-size="12" class="c-nl" text-anchor="end">Alibaba Qwen</text></g><g class="c-node" data-id="nebius" data-angle="188.9"><circle cx="298.73" cy="196.53" r="3.2" fill="#36E2FF" class="c-nd"/><text x="289.73" y="198.53" font-size="12" class="c-nl" text-anchor="end">Nebius Token Factory</text></g><g class="c-node" data-id="venice" data-angle="200.1"><circle cx="336.85" cy="139.09" r="3.2" fill="#36E2FF" class="c-nd"/><text x="327.85" y="141.09" font-size="12" class="c-nl" text-anchor="end">Venice</text></g><g class="c-node" data-id="chutes" data-angle="213.53"><circle cx="399.53" cy="90.63" r="3.2" fill="#36E2FF" class="c-nd"/><text x="390.53" y="92.63" font-size="12" class="c-nl" text-anchor="end">Chutes</text></g><g class="c-node" data-id="cohere" data-angle="230.92"><circle cx="481.69" cy="55.08" r="3.2" fill="#36E2FF" class="c-nd"/><text x="472.69" y="57.08" font-size="12" class="c-nl" text-anchor="end">Cohere</text></g><g class="c-node" data-id="azure" data-angle="253.57"><circle cx="576.68" cy="35.32" r="3.2" fill="#36E2FF" class="c-nd"/><text x="576.68" y="54.32" font-size="12" class="c-nl" text-anchor="middle">Azure OpenAI</text></g><circle cx="640" cy="250" r="46" fill="url(#c-cg)"/><circle cx="640" cy="250" r="5.5" fill="#ECF6FF"/><text x="640" y="280" font-size="15" font-weight="700" fill="#ECF6FF" text-anchor="middle" class="c-m">36</text><text x="640" y="294" font-size="11" fill="#9692AC" text-anchor="middle" class="c-m">provider profiles</text></svg><!-- constellation:end -->
+        </div></div>
+    </figure>
+    <p class="panhint" aria-hidden="true">Drag to pan</p>
+    <p class="cap"><span data-count="total">36</span> providers in v3.0.0 on four orbits around Pulsar Core, grouped by how Core reaches each
+      profile: local <span data-count="local">6</span>, native <span data-count="native">6</span>, cloud <span data-count="cloud">2</span>,
+      keyed adapters <span data-count="adapter">22</span>. The beam turns at the speed of the terminal's own boot beam.</p>
+<!-- providers:begin --><script type="application/json" id="pdata">{"clk":{"w1":71.6197,"a0":20.0535,"P1":5.0265,"H":2.5133,"pr":[5.274,5.027]},"rip":{"r0":10,"r1":58,"dur":0.62,"stroke":7.5,"inner_delay":0.07,"inner_r0":5,"inner_r1":36,"flash_r":12,"flash_until":0.22},"n":36,"g":{"local":["ollama","lmstudio","llamacpp","vllm","jan","localai"],"native":["anthropic","deepseek","moonshot","zai","minimax","foundry"],"cloud":["bedrock","vertex"],"adapter":["nvidia","openrouter","openai","gemini","groq","xai","mistral","cerebras","together","fireworks","huggingface","deepinfra","sambanova","vercel","requesty","novita","dashscope","nebius","venice","chutes","cohere","azure"]},"names":{"nvidia":"NVIDIA NIM","anthropic":"Anthropic","openrouter":"OpenRouter","openai":"OpenAI","gemini":"Google Gemini","groq":"Groq","xai":"xAI","deepseek":"DeepSeek","moonshot":"Moonshot Kimi","zai":"Z.ai GLM","minimax":"MiniMax","mistral":"Mistral","cerebras":"Cerebras","together":"Together AI","fireworks":"Fireworks AI","huggingface":"Hugging Face","deepinfra":"DeepInfra","sambanova":"SambaNova","vercel":"Vercel AI Gateway","requesty":"Requesty","novita":"Novita AI","dashscope":"Alibaba Qwen","nebius":"Nebius Token Factory","venice":"Venice","chutes":"Chutes","cohere":"Cohere","azure":"Azure OpenAI","foundry":"Azure AI Foundry (Claude)","bedrock":"Amazon Bedrock","vertex":"Google Vertex AI","ollama":"Ollama","lmstudio":"LM Studio","llamacpp":"llama.cpp","vllm":"vLLM","jan":"Jan","localai":"LocalAI"},"p":[["bedrock-api-key-","bedrock","Amazon Bedrock","cloud","cloud"],["sk-svcacct-","openai","OpenAI","adapter","chat"],["sk-ant-api","anthropic","Anthropic","native","native"],["sk-proj-","openai","OpenAI","adapter","chat"],["sk-ant-","anthropic","Anthropic","native","native"],["sk-api-","minimax","MiniMax","native","native"],["tgp_v1_","together","Together AI","adapter","chat"],["nvapi-","nvidia","NVIDIA NIM","adapter","chat"],["sk-or-","openrouter","OpenRouter","adapter","chat"],["sk-cp-","minimax","MiniMax","native","native"],["vapi_","venice","Venice","adapter","chat"],["AIza","gemini","Google Gemini","adapter","chat"],["gsk_","groq","Groq","adapter","chat"],["xai-","xai","xAI","adapter","chat"],["csk-","cerebras","Cerebras","adapter","chat"],["csk_","cerebras","Cerebras","adapter","chat"],["tgp_","together","Together AI","adapter","chat"],["vck_","vercel","Vercel AI Gateway","adapter","chat"],["cpk_","chutes","Chutes","adapter","chat"],["ABSK","bedrock","Amazon Bedrock","cloud","cloud"],["AQ.","gemini","Google Gemini","adapter","chat"],["fw_","fireworks","Fireworks AI","adapter","chat"],["hf_","huggingface","Hugging Face","adapter","chat"]],"u":["sk-ant-oat"],"r":[["sk-ant-admin","This is an Anthropic Admin API key."],["sk-admin-","This is an OpenAI Admin key."],["pplx-","This is a Perplexity key."],["ghp_","This is a GitHub token."],["gho_","This is a GitHub token."],["ghu_","This is a GitHub token."],["ghs_","This is a GitHub token."],["ghr_","This is a GitHub token."],["github_pat_","This is a GitHub token."],["sk_live_","This is a Stripe key, not an AI provider key."],["sk_test_","This is a Stripe key, not an AI provider key."],["rk_live_","This is a Stripe key, not an AI provider key."],["rk_test_","This is a Stripe key, not an AI provider key."]],"amb":["deepseek","dashscope","moonshot","openai"],"lw":{"ollama":"ollama","local":"ollama","lmstudio":"lmstudio","lm-studio":"lmstudio","llama.cpp":"llamacpp","llamacpp":"llamacpp","llama-server":"llamacpp","vllm":"vllm","jan":"jan","localai":"localai"},"core":"127.0.0.1"}</script><!-- providers:end -->
+  </div>
+</section>
+
+<section class="sec" id="signal" aria-labelledby="sig-h">
+  <div class="wrap">
+    <div class="head two">
+      <p class="eyebrow">Signal path · relay before the first byte</p>
+      <h2 id="sig-h" class="glint">One reply, one model, a plan B</h2>
+      <p class="sub">Claude Code talks to Pulsar Core on 127.0.0.1 with a session token. Core holds the line with SSE pings while it opens
+        the provider, and commits to the first target that answers.</p>
+    </div>
+    <div class="panel sig pan" tabindex="0" role="region" aria-label="Signal path diagram, scrolls sideways"><img src="assets/brand/signal-dark.v3.svg" width="1280" height="320" loading="lazy" decoding="async"
+      alt="Illustrative, time compressed: a key prefix is detected, Pulsar Core on 127.0.0.1 sends the request on the chat wire to target 1, which answers 503; Core holds the line with pings, target 2 answers 200 and commits, and tokens stream back to the unmodified Claude Code"></div>
+    <p class="panhint" aria-hidden="true">Drag to pan</p>
+    <p class="cap">Before the first 200, any target may fail and the next in the session plan takes over. After it, Pulsar Core streams only from that target.</p>
+    <ol class="steps rise">
+      <li class="panel" style="--i:0">You paste a key; its prefix names the provider, longest prefix first. Bare <code>sk-</code> keys ask you to choose.</li>
+      <li class="panel" style="--i:1">Claude Code sends Anthropic Messages to Pulsar Core with a local session token. Core picks one wire per model: native, chat completions or the Responses API.</li>
+      <li class="panel" style="--i:2">A 429, 5xx, timeout or rejected key before the first byte moves the same request to the next target. After the commit, a failure ends the reply with a readable notice.</li>
+    </ol>
+    <div class="grid3 rise">
+      <div class="panel fact" style="--i:0"><h3>Hot swap</h3><p><code>/pulsar:switch &lt;model&gt;</code> inside the session, <code>pulsarcode switch &lt;model&gt;</code> from another terminal, or Claude Code's own <code>/model</code>. It takes effect on the next message.</p></div>
+      <div class="panel fact" style="--i:1"><h3>Translation for open models</h3><p>Fresh tool ids, tool calls emitted as text are rescued, long tool names get a stable alias, and a tool call cut off mid-arguments is withheld instead of run.</p></div>
+      <div class="panel fact" style="--i:2"><h3>Self-healing requests</h3><p>A rejected parameter is adjusted and retried, and the fix is remembered per model for a week.</p></div>
+      <div class="panel fact" style="--i:3"><h3>Real context windows</h3><p>Claude Code compacts inside the model's real window, up to its 1M mode (windows between 200k and 1M are used as 200k), and overflow errors come back as "prompt is too long", so compaction engages.</p></div>
+      <div class="panel fact" style="--i:4"><h3>Loop guard</h3><p>Four identical steps in a row are answered with an explanation instead of another provider call (<code>PULSAR_LOOPGUARD=0</code> turns it off).</p></div>
+      <div class="panel fact" style="--i:5"><h3>Cloud routes</h3><p>Amazon Bedrock and Google Vertex AI take a different route: Claude Code talks to the cloud directly with its own auth.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="replays" aria-labelledby="rp-h">
+  <div class="wrap">
+    <div class="head two">
+      <p class="eyebrow">Replays · recorded terminal frames</p>
+      <h2 id="rp-h" class="glint">See it run</h2>
+      <p class="sub">Frame-by-frame recordings from <code>tools/demo/record.py</code>, drawn here on a canvas. Recorded in a sandbox against a
+        scripted stand-in for the providers, with obviously fake keys: model names, counts and timings in them are illustrative.</p>
+    </div>
+    <div class="panel player" id="player">
+      <div class="ptabs" role="tablist" aria-label="Recording">
+        <button class="tab" role="tab" aria-selected="true" data-s="session" id="pt-session" aria-controls="pscreen" data-alt="The official Claude Code CLI launched through Pulsar Code on a non-Claude model: a question about a small project, a Read tool call, a streamed answer and the Pulsar status line">session</button>
+        <button class="tab" role="tab" aria-selected="false" tabindex="-1" data-s="uplink" id="pt-uplink" aria-controls="pscreen" data-alt="Pulsar Code key setup: the obviously fake key sk-or-v1-fake-key-not-real is typed and shown masked, OpenRouter is detected from its shape, and the demo upstream answers with LINK ESTABLISHED">uplink</button>
+        <button class="tab" role="tab" aria-selected="false" tabindex="-1" data-s="boot" id="pt-boot" aria-controls="pscreen" data-alt="Pulsar Code boot sequence: the wordmark decrypts, beams sweep, and the SYSTEMS panel checks uplink, model catalog, Pulsar Core and hardware">boot</button>
+        <button class="tab" role="tab" aria-selected="false" tabindex="-1" data-s="picker" id="pt-picker" aria-controls="pscreen" data-alt="Pulsar Code model picker: searching kimi across three providers&#x27; catalogs, moving the selection and choosing a model">picker</button>
+        <button class="tab" role="tab" aria-selected="false" tabindex="-1" data-s="stage" id="pt-stage" aria-controls="pscreen" data-alt="Pulsar Stage viewer showing a scripted sample deck (demo data): five slides from a title slide through bullets, a bar chart and a flow diagram to a timeline">stage</button>
+        <button class="tab" role="tab" aria-selected="false" tabindex="-1" data-s="top" id="pt-top" aria-controls="pscreen" data-alt="Pulsar Observatory (pulsarcode top): three sessions of synthetic traffic with throughput and latency charts, provider relays, an open circuit breaker and a Stage event">top</button>
+      </div>
+      <div class="screen" id="pscreen" role="tabpanel" aria-labelledby="pt-session" tabindex="0" aria-describedby="palt pkeys">
+        <img id="poster" src="demo/posters/session.png" width="860" height="556" alt="Last frame of the session recording" loading="lazy" decoding="async">
+        <canvas id="pcv" role="img" aria-label="Terminal recording"></canvas>
+        <button class="bigplay" type="button" id="bigplay">Play recording</button>
+      </div>
+      <div class="ctl">
+        <button class="ib" type="button" id="pp" aria-label="Play">Play</button>
+        <div class="scrub"><input id="scrub" type="range" min="0" max="1000" value="1000" step="1" aria-label="Position in the recording"><div class="ticks" id="ticks" aria-hidden="true"></div></div>
+        <span class="tc" id="tc">00:00 / 00:00</span>
+        <div class="spd" role="group" aria-label="Speed"><button class="ib" type="button" data-r=".5" aria-pressed="false">.5x</button><button class="ib" type="button" data-r="1" aria-pressed="true">1x</button><button class="ib" type="button" data-r="2" aria-pressed="false">2x</button></div>
+        <button class="ib" type="button" id="camb" aria-pressed="true">Camera</button>
+      </div>
+    </div>
+    <p class="alt" id="palt">The official Claude Code CLI launched through Pulsar Code on a non-Claude model: a question about a small project, a Read tool call, a streamed answer and the Pulsar status line</p>
+    <p class="sr" id="pkeys">Space or K plays and pauses, J and L jump one second, arrow keys and comma or period step one frame.</p>
+  </div>
+</section>
+
+<section class="sec" id="extras" aria-labelledby="ex-h">
+  <div class="wrap">
+    <div class="head two">
+      <p class="eyebrow">Extras · through Claude Code's plugin and hooks interfaces</p>
+      <h2 id="ex-h" class="glint">More than a launcher</h2>
+      <p class="sub">Claude Code gains a few new senses: the model can present, ask a second opinion, see the screen when you allow it,
+        and you can watch the traffic.</p>
+    </div>
+    <div class="cards rise">
+      <article class="panel card" style="--i:0"><img src="assets/brand/card-stage-dark.v3.svg" width="600" height="340" loading="lazy" decoding="async" alt="Stage card: a terminal at left; a pane slides in and the model presents a bar chart, then a diagram, then a title slide">
+        <div><h3>Stage</h3><p>The model presents decks, charts, diagrams, code, tables, metrics, timelines and progress. Inside Claude Code as a live pane on Claude Code 2.1.287 and later (its function-hooks plugin API is early access); otherwise a terminal split, a browser view whose content security policy blocks all external requests, or an HTML export.</p></div></article>
+      <article class="panel card" style="--i:1"><img src="assets/brand/card-council-dark.v3.svg" width="600" height="340" loading="lazy" decoding="async" alt="Council card, illustrative: three columns headed model A, model B and model C stream answers at their own pace, then a synthesis row spans all three">
+        <div><h3>Council</h3><p><code>/pulsar:council</code> asks your other connected models the same question and shows the answers side by side. The card is illustrative.</p></div></article>
+      <article class="panel card" style="--i:2"><img src="assets/brand/card-observatory-dark.v3.svg" width="600" height="340" loading="lazy" decoding="async" alt="Observatory card with a DEMO DATA stamp: a tokens per second sparkline, three session rows and a breaker that opens and closes">
+        <div><h3>Observatory</h3><p><code>pulsarcode top</code>: live sessions, tokens per second, time to first token, relays and circuit breakers. The card shows demo data.</p></div></article>
+    </div>
+
+    <div class="panel pilot" id="pilot">
+      <div>
+        <p class="eyebrow">Pilot · opt-in · off by default</p>
+        <h3>Computer use you can see coming</h3>
+        <p class="sub" style="font-size:16px">With <code>pulsarcode pilot on</code> the model can take screenshots, move the pointer and type. The
+          pulsar cursor shows where it is about to act.</p>
+        <ul>
+          <li>You arm it in your own terminal; <code>pulsarcode pilot on</code> refuses inside a Claude Code session.</li>
+          <li>Actions are not pre-approved: Claude Code's permission system decides, and in its default mode it asks you each time.</li>
+          <li>A session with Pilot armed never relays: screenshots go only to the model you chose.</li>
+          <li>Failsafe corner (top-left), a limit of 10 actions per second, and a local audit log with no typed text and no images.</li>
+          <li>Input is refused when the window in front changed since the last screenshot (where the system can tell), and shortcuts that
+            log out, lock, force-quit or power off are never pressed.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="sandbox" id="sandbox" aria-describedby="sbcap">
+          <div class="bar"><span>release · staging</span><b>SANDBOX</b></div>
+          <div class="mock">
+            <div><div class="lbl">Release notes</div><button class="fld mb" type="button" data-l="Release notes" style="width:100%;text-align:left">notes for this release</button></div>
+            <div><div class="lbl">Environment</div><div class="row"><button class="mb" type="button" data-l="staging">staging</button><button class="mb" type="button" data-l="production">production</button></div></div>
+            <div class="end"><button class="mb" type="button" data-l="Cancel">Cancel</button><button class="mb pri" type="button" data-l="Deploy">Deploy</button></div>
+          </div>
+          <canvas id="pcan" aria-hidden="true"></canvas>
+        </div>
+        <p class="sbcap" id="sbcap">This is the overlay Pilot draws on your desktop. Here nothing is clicked. Click anywhere in the window, or Tab to a button and press Enter.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="privacy" aria-labelledby="pr-h">
+  <div class="wrap">
+    <div class="head two">
+      <p class="eyebrow">Privacy and security</p>
+      <h2 id="pr-h" class="glint">Local by design, token-gated by default</h2>
+      <p class="sub">What leaves your machine in the default configuration, and how the local router is kept to itself.</p>
+    </div>
+    <div class="panel tablewrap">
+      <table class="tbl">
+        <caption class="sr">Where your data goes with Pulsar Code</caption>
+        <thead><tr><th scope="col">What</th><th scope="col">Where it goes</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Your prompts, code and tool results</th><td>To the provider and model you picked. If that provider fails before the first byte of an answer, the same request goes to your relay chain (<code>pulsarcode relay off</code> turns that off). Automatic relay stays among the listed hosted providers: a local server or a custom URL never relays on its own, and a session with Pilot armed never relays. When you use Council, the question also goes to your other connected models; Claude Code asks first unless you typed <code>/pulsar:council</code> yourself.</td></tr>
+          <tr><th scope="row">Your API keys</th><td>Only to the provider each key was matched to. Stored in <code>~/.pulsarcode/keys.json</code> (0600, directory 0700, atomic writes). Upstream redirects are not followed, so a key cannot be bounced to another host, and a key is never sent over plain http to a host outside your machine and local network unless you set <code>PULSAR_ALLOW_HTTP=1</code>.</td></tr>
+          <tr><th scope="row">What Claude Code sees</th><td>On the default route, a random local session token, not your provider key; provider keys exported in your shell are removed from its environment. Deny rules keep its Read and Edit tools away from Pulsar's keys, the tokens in Pulsar's <code>run/</code> folder, the logs and the isolated profile's credentials, and its Edit tool away from what Pulsar runs, on Windows too. The cloud routes (Bedrock, Vertex AI) hand Claude Code that cloud's own credentials.</td></tr>
+          <tr><th scope="row">Upstream text</th><td>Errors, notices, diagnostics and council answers are scrubbed of your key, Bearer values and known key shapes before they reach Claude Code, the event bus or the next provider in a relay chain. Successful model output is passed through as is.</td></tr>
+          <tr><th scope="row">The local router</th><td>Pulsar Core binds 127.0.0.1, checks the Host header against DNS rebinding, refuses foreign browser origins, caps request bodies and wants a token on each API call (health probes aside). The browser Stage view gets a derived, read-only token.</td></tr>
+          <tr><th scope="row">The folder you work in</th><td>Pulsar does not import Python code from your working directory, so a repository that ships its own <code>pulsar</code> package cannot run code through Pulsar.</td></tr>
+          <tr><th scope="row">Pilot</th><td>Off by default. Actions are not pre-approved: Claude Code's permission system decides, and in the default mode it asks you each time. Failsafe corner, rate limit, and an audit log without typed text or images.</td></tr>
+          <tr><th scope="row">Telemetry</th><td>None from Pulsar: there is no Pulsar server, account or analytics. Claude Code's telemetry, error reporting, non-essential traffic and auto-update are switched off for Pulsar sessions.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="honest">Found a problem? Please report it privately as described in
+      <a href="https://github.com/PulsarOSDevTeam/pulsarcode/blob/main/SECURITY.md">SECURITY.md</a>.</p>
+  </div>
+</section>
+
+<section class="sec" id="faq" aria-labelledby="faq-h">
+  <div class="wrap">
+    <div class="head">
+      <p class="eyebrow">FAQ</p>
+      <h2 id="faq-h" class="glint">Questions, answered plainly</h2>
+    </div>
+    <div class="faq">
+      <details>
+        <summary>Do I need Pulsar Code, or just ANTHROPIC_BASE_URL?</summary>
+        <div class="a">
+          <p>If one provider with a native Anthropic endpoint is all you need, set <code>ANTHROPIC_BASE_URL</code> and you may not need Pulsar.
+            Recent Ollama versions and OpenRouter can talk to Claude Code directly, and DeepSeek, Kimi, GLM and MiniMax publish
+            Anthropic-compatible endpoints. That is a fine setup.</p>
+          <p>Pulsar Code earns its place when your provider speaks only the OpenAI wire, when you use more than one provider, when you run
+            open models whose tool calls need repair, when you want compaction to follow the model's real window, when you want your upstream
+            key out of Claude Code's environment, or when you want Stage, Council, Pilot and the Observatory.</p>
+          <p>What it costs you: one more local process; a translation layer that can lag behind a new Claude Code field; and a configuration
+            Anthropic does not support. Claude Code is built and tuned for Claude models, and results with other models vary.</p>
+        </div>
+      </details>
+      <details>
+        <summary>Does Anthropic support or endorse this?</summary>
+        <div class="a">
+          <p>No. Pulsar Code is an independent project, not affiliated with or endorsed by Anthropic. Anthropic does not support routing Claude
+            Code to non-Claude models, so a Claude Code update can change behavior. Please report problems to Pulsar Code, not to Anthropic.</p>
+          <p>Pulsar uses Claude Code's documented configuration (the <a href="https://code.claude.com/docs/en/llm-gateway">LLM gateway settings</a>,
+            per-session settings and plugins). Pulsar Code v3.0.0 is tested with Claude Code 2.1.287 through 2.1.296.</p>
+        </div>
+      </details>
+      <details>
+        <summary>Is Claude Code modified?</summary>
+        <div class="a"><p>No. Pulsar Code launches the official Claude Code CLI you installed, unmodified, and configures it through environment
+          variables, a settings file and a plugin directory for that session. It does not patch, bundle or redistribute Claude Code. Run
+          <code>claude</code> directly any time and it is untouched.</p></div>
+      </details>
+      <details>
+        <summary>Do my own skills, hooks, MCP servers and plugins come along?</summary>
+        <div class="a"><p>Your project's do: the <code>.claude/</code> folder and <code>.mcp.json</code> in the folder you work in are read as usual.
+          Your user-level setup in <code>~/.claude</code> does not by default, because Pulsar Code launches Claude Code with a profile of its
+          own and leaves <code>~/.claude</code> alone. <code>PULSAR_SKILLS=skill-a,skill-b</code> copies those skill folders from
+          <code>~/.claude/skills</code> into that profile at each launch. Or set <code>PULSAR_CLAUDE_CONFIG=shared</code> to use your own
+          <code>~/.claude</code> as it is (Pulsar then leaves <code>CLAUDE_CONFIG_DIR</code> as you set it).</p></div>
+      </details>
+      <details>
+        <summary>Which providers can I use?</summary>
+        <div class="a"><p><span data-count="total">36</span> provider profiles in v3.0.0, plus any OpenAI-compatible URL, or an Anthropic Messages URL ending in <code>/anthropic</code>:</p>
+<!-- plist:begin --><ul class="plist"><li><b>Keyed adapters <span class="count">22</span>:</b> <span class="pn">NVIDIA NIM</span>, <span class="pn">OpenRouter</span>, <span class="pn">OpenAI</span>, <span class="pn">Google Gemini</span>, <span class="pn">Groq</span>, <span class="pn">xAI</span>, <span class="pn">Mistral</span>, <span class="pn">Cerebras</span>, <span class="pn">Together AI</span>, <span class="pn">Fireworks AI</span>, <span class="pn">Hugging Face</span>, <span class="pn">DeepInfra</span>, <span class="pn">SambaNova</span>, <span class="pn">Vercel AI Gateway</span>, <span class="pn">Requesty</span>, <span class="pn">Novita AI</span>, <span class="pn">Alibaba Qwen</span>, <span class="pn">Nebius Token Factory</span>, <span class="pn">Venice</span>, <span class="pn">Chutes</span>, <span class="pn">Cohere</span>, <span class="pn">Azure OpenAI</span></li><li><b>Native Anthropic Messages <span class="count">6</span>:</b> <span class="pn">Anthropic</span>, <span class="pn">DeepSeek</span>, <span class="pn">Moonshot Kimi</span>, <span class="pn">Z.ai GLM</span>, <span class="pn">MiniMax</span>, <span class="pn">Azure AI Foundry (Claude)</span></li><li><b>Clouds <span class="count">2</span>:</b> <span class="pn">Amazon Bedrock</span>, <span class="pn">Google Vertex AI</span></li><li><b>On your machine <span class="count">6</span>:</b> <span class="pn">Ollama</span>, <span class="pn">LM Studio</span>, <span class="pn">llama.cpp</span>, <span class="pn">vLLM</span>, <span class="pn">Jan</span>, <span class="pn">LocalAI</span></li></ul><!-- plist:end --></div>
+      </details>
+      <details>
+        <summary>Which model should I start with?</summary>
+        <div class="a"><p>Models with strong tool calling do best in Claude Code's agent loop. The picker ranks each connected catalog and suggests a
+          tier, but the honest answer is to try two or three on your own work: switching is one command, and the Observatory shows how each
+          one behaves.</p></div>
+      </details>
+      <details>
+        <summary>Does it work offline with local models?</summary>
+        <div class="a"><p>Yes. Ollama, LM Studio, llama.cpp, vLLM, Jan and LocalAI servers on your machine are found on loopback, and the key
+          prompt offers one it finds; or type <code>ollama</code> at the key prompt or paste a local URL. Local servers skip your HTTP proxy by default
+          (<code>PULSAR_PROXY_LOCAL=1</code> overrides that). For a server you host elsewhere, set <code>PULSARCODE_LOCAL_ENDPOINT</code> to
+          its OpenAI-compatible URL (or an Anthropic Messages URL ending in <code>/anthropic</code>): Pulsar adds it as a profile and
+          prefers it at launch while it answers.</p></div>
+      </details>
+      <details>
+        <summary>Where do my keys go?</summary>
+        <div class="a"><p>Into <code>~/.pulsarcode/keys.json</code> on your machine, and from there to the provider each key was recognised for,
+          by Pulsar Core on loopback. Never type a key as a command argument: <code>pulsarcode key</code> reads it at a masked prompt, or use
+          <code>--stdin</code> or <code>--from-env VAR</code>.</p></div>
+      </details>
+      <details>
+        <summary>How are updates handled?</summary>
+        <div class="a"><p><code>pulsarcode update</code> installs the latest release tag, checked against its <code>SHA256SUMS</code>
+          (<code>pulsarcode update v3.0.0</code> pins one). It never installs a tag older than v3.0.0, never moves to an older version than
+          the one running unless you add <code>--allow-downgrade</code>, and stops with a clear message when the latest release cannot be
+          found; <code>pulsarcode update main</code> installs <code>main</code> when you ask for it. Pulsar sessions switch off Claude Code's
+          auto-updater (<code>PULSAR_CLAUDE_AUTOUPDATE=1</code> turns it back on); Pulsar runs the same <code>claude</code> binary you use
+          directly.</p></div>
+      </details>
+      <details>
+        <summary>What does it cost?</summary>
+        <div class="a"><p>Pulsar Code is free software under the AGPL-3.0-or-later. Model usage is between you and your providers: several have
+          free tiers, and local models run on your own hardware.</p></div>
+      </details>
+      <details>
+        <summary>What do I need installed, and how do I remove it?</summary>
+        <div class="a"><p>macOS, Linux, WSL or Windows (native Windows is experimental; WSL gives the smoothest ride). On macOS, Linux and WSL the
+          installer needs bash, tar and curl (or wget); on Windows, PowerShell. <code>pulsarcode uninstall</code> removes Pulsar Code and
+          leaves Claude Code installed.</p></div>
+      </details>
+      <details>
+        <summary>Real captures</summary>
+        <div class="a">
+          <div class="gal">
+            <figure><img src="assets/screens/stage-pane.png" width="1440" height="900" loading="lazy" decoding="async" alt="Claude Code with the Pulsar Stage pane docked on the right, showing slide 3 of 5, a bar chart of tokens per second for a sample session"><figcaption>Claude Code 2.1.287 with the Stage pane, a scratch Core and a local test model.</figcaption></figure>
+            <figure><img src="assets/screens/observatory.png" width="1440" height="900" loading="lazy" decoding="async" alt="pulsarcode top: totals, three sessions with their routes, a throughput graph, a latency strip, a feed of relay and breaker events"><figcaption>Observatory against a live Core with synthetic traffic.</figcaption></figure>
+            <figure><img src="assets/screens/pilot-cursor.png" width="1440" height="900" loading="lazy" decoding="async" alt="Four captures of the pulsar cursor overlay: a glide toward a Deploy button, a click ripple with a CLICK Deploy chip, a typing caret with a TYPE 24 chars chip, and keycaps"><figcaption>The Pilot overlay on a test desktop; no input was sent.</figcaption></figure>
+          </div>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="fgrid">
+      <div>
+        <div class="fmark"><svg aria-hidden="true"><use href="#pm"/></svg>PULSAR CODE</div>
+        <div style="margin-top:10px">AGPL-3.0-or-later · © 2026 PulsarOS Intelligence Inc., made in Canada</div>
+      </div>
+      <nav class="fl" aria-label="Project links">
+        <a href="https://github.com/PulsarOSDevTeam/pulsarcode">GitHub</a>
+        <a href="https://github.com/PulsarOSDevTeam/pulsarcode/blob/main/docs/ARCHITECTURE.md">Architecture</a>
+        <a href="https://github.com/PulsarOSDevTeam/pulsarcode/blob/main/SECURITY.md">Security</a>
+        <a href="https://github.com/PulsarOSDevTeam/pulsarcode/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://github.com/PulsarOSDevTeam/pulsarcode/blob/main/LICENSE">License</a>
+        <a href="https://pulsaros.ca">pulsaros.ca</a>
+      </nav>
+    </div>
+    <p class="disc">Claude and Claude Code are trademarks of Anthropic PBC. Pulsar Code is independent and not affiliated with or endorsed by
+      Anthropic. Anthropic does not support routing Claude Code to non-Claude models; a Claude Code update can change behavior. Other product
+      names belong to their owners and are used only to say what Pulsar Code can connect to.</p>
+  </div>
+</footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<!-- js:begin --><i id="more" hidden data-src="assets/site/more.js?v=4cf471bb16"></i><script>(()=>{"use strict";const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];const RM=matchMedia("(prefers-reduced-motion: reduce)");let reduced=RM.matches;const D=JSON.parse($("#pdata").textContent);const CLK=D.clk,W1=CLK.w1,A0=CLK.a0,P1=CLK.P1*1000,HP=CLK.H*1000;const ICE="#ECF6FF",ASH="#9692AC",BAD="#FF465A";const E_SETTLE="cubic-bezier(.16,1,.3,1)",E_IMPACT="cubic-bezier(.05,.9,.2,1)",E_COOL="cubic-bezier(.2,.8,.2,1)";const clamp=(v,a=0,b=1)=>v<a?a:v>b?b:v;const store={get(k){try{return localStorage.getItem(k);}catch(e){return null;}},set(k,v){try{localStorage.setItem(k,v);}catch(e){}}};const subs=new Set();let raf=0;function loop(now){raf=0;for(const f of[...subs])if(!f(now))subs.delete(f);if(subs.size)raf=requestAnimationFrame(loop);}
+function want(f){subs.add(f);if(!raf)raf=requestAnimationFrame(loop);}
+function seen(el,cb,opt){const io=new IntersectionObserver(es=>es.forEach(e=>cb(e.isIntersecting,e)),opt);io.observe(el);return io;}
+const toast=$("#toast");let toastT=0;function say(m){toast.textContent=m;toast.classList.add("on");clearTimeout(toastT);toastT=setTimeout(()=>toast.classList.remove("on"),1800);}
+const hapBtn=$("#haptics"),lisBtn=$("#listen");const canVibe=typeof navigator.vibrate==="function";let hap=canVibe&&store.get("pc.haptics")==="1";function buzz(p){if(hap&&canVibe&&!reduced)try{navigator.vibrate(p);}catch(e){}}
+if(canVibe){hapBtn.hidden=false;hapBtn.setAttribute("aria-pressed",hap);}
+hapBtn.addEventListener("click",()=>{hap=!hap;hapBtn.setAttribute("aria-pressed",hap);store.set("pc.haptics",hap?"1":"0");if(hap)buzz([10,30,10]);});function tabs(list,onSelect){const ts=$$('[role="tab"]',list);const pick=(tab,focus)=>{ts.forEach(t=>{const on=t===tab;t.setAttribute("aria-selected",on);t.tabIndex=on?0:-1;});if(focus)tab.focus();onSelect(tab);};ts.forEach((t,i)=>{t.addEventListener("click",()=>pick(t,false));t.addEventListener("keydown",e=>{const k=e.key;let j=null;if(k==="ArrowRight")j=(i+1)%ts.length;else if(k==="ArrowLeft")j=(i-1+ts.length)%ts.length;else if(k==="Home")j=0;else if(k==="End")j=ts.length-1;if(j!==null){e.preventDefault();e.stopPropagation();pick(ts[j],true);}});});return pick;}
+const GH="https://raw.githubusercontent.com/PulsarOSDevTeam/pulsarcode/";const CMDS={nix:["$ ","curl -fsSL "+GH+"main/install.sh | bash","curl -fsSL "+GH+"v3.0.0/install.sh | PULSAR_REF=v3.0.0 bash"],win:["PS> ","irm "+GH+"main/install.ps1 | iex","$env:PULSAR_REF = 'v3.0.0'; irm "+GH+"v3.0.0/install.ps1 | iex"]};let os="nix";const cmdtext=$("#cmdtext"),copyB=$("#copy");const pickOS=tabs($(".install .tabs"),t=>{os=t.dataset.os;$("#cmd").setAttribute("aria-labelledby",t.id);const p=document.createElement("span");p.className="p";p.textContent=CMDS[os][0];cmdtext.textContent="";cmdtext.append(p,CMDS[os][1]);$("#pintext").textContent=CMDS[os][2];});const plat=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||"";if(/^win/i.test(plat))pickOS($("#t-win"),false);copyB.addEventListener("click",async()=>{let ok=false;try{await navigator.clipboard.writeText(CMDS[os][1]);ok=true;}catch(e){const r=document.createRange();r.selectNodeContents(cmdtext);const s=getSelection();s.removeAllRanges();s.addRange(r);try{ok=document.execCommand("copy");}catch(e2){ok=false;}}
+if(ok){buzz([10,30,10]);copyB.classList.add("ok");copyB.textContent="Copied";setTimeout(()=>{copyB.classList.remove("ok");copyB.textContent="Copy";},1600);}
+say(ok?"Copied. Paste it into your terminal.":"Selected. Press Ctrl+C or Cmd+C to copy.");});const rio=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add("in");rio.unobserve(e.target);}}),{rootMargin:"0px 0px -12% 0px"});$$(".glint,.rise").forEach(el=>rio.observe(el));const hero=$(".hero-art"),stage=$(".stage"),header=$(".top"),dock=$(".dock");let heroVis=true,heroT0=0;function heroStart(){const e=hero&&performance.getEntriesByName(hero.currentSrc||hero.src)[0];heroT0=e?e.responseEnd:performance.now();}
+if(hero){if(hero.complete)heroStart();else hero.addEventListener("load",heroStart);}
+function dockVars(){if(!hero)return;const r=hero.getBoundingClientRect(),s=r.width/1280;const cx=r.left+250*s,cy=r.top+scrollY+190*s;const sl=$(".slot").getBoundingClientRect(),st=dock.style;st.setProperty("--x0",cx-14+"px");st.setProperty("--y0",cy-14+"px");st.setProperty("--s0",Math.max(1,5.5*s/3.1).toFixed(3));st.setProperty("--x1",sl.left+"px");st.setProperty("--y1",sl.top+"px");const dr=Math.max(1,cy-14-sl.top);st.setProperty("--y7",cy-14-.7*dr+"px");st.animationRange="0px "+dr.toFixed(1)+"px";}
+const canDock=CSS.supports&&CSS.supports("animation-timeline: scroll()");function setupDock(){if(reduced){document.body.classList.add("nodock");dock.classList.remove("on");return;}
+document.body.classList.remove("nodock");if(canDock){dockVars();dock.classList.add("on");}}
+addEventListener("resize",()=>{if(canDock&&!reduced)dockVars();});seen(stage,v=>{heroVis=v;stage.classList.toggle("off",!v);header.classList.toggle("past",!v);if(!canDock||reduced)header.classList.toggle("docked",!v);pulseClock();},{rootMargin:"-56px 0px 0px 0px"});let actx=null,listen=store.get("pc.listen")==="1",lt=0;function tick(){if(!actx)return;const t=actx.currentTime,out=actx.createGain();out.gain.value=.126;out.connect(actx.destination);const n=actx.createBuffer(1,Math.ceil(actx.sampleRate*.002),actx.sampleRate),d=n.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;const src=actx.createBufferSource(),bp=actx.createBiquadFilter();bp.type="bandpass";bp.frequency.value=2400;bp.Q.value=1.2;src.buffer=n;src.connect(bp);bp.connect(out);src.start(t);const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=110;g.gain.setValueAtTime(1,t);g.gain.exponentialRampToValueAtTime(.001,t+.06);o.connect(g);g.connect(out);o.start(t);o.stop(t+.07);}
+function pulseClock(){clearTimeout(lt);if(!listen||!heroVis||document.hidden||!actx)return;if(!heroT0){lt=setTimeout(pulseClock,500);return;}
+const dl=CLK.pr[0]*1000,du=CLK.pr[1]*1000,ct=performance.now()-heroT0;const wait=ct<dl?dl-ct:du-((ct-dl)%du);lt=setTimeout(()=>{tick();pulseClock();},Math.max(16,wait));}
+function setListen(on){listen=on;lisBtn.setAttribute("aria-pressed",on);store.set("pc.listen",on?"1":"0");if(on&&!actx){const AC=window.AudioContext||window.webkitAudioContext;if(AC)actx=new AC();}
+if(actx){if(on)actx.resume();else actx.suspend();}
+pulseClock();}
+lisBtn.setAttribute("aria-pressed","false");lisBtn.addEventListener("click",()=>setListen(lisBtn.getAttribute("aria-pressed")!=="true"));document.addEventListener("visibilitychange",pulseClock);const keyIn=$("#key"),ro=$("#readout"),cfig=$("#const"),cam=$(".cam",cfig),csv=$("svg",cfig);const beam=csv&&csv.querySelector('[class$="beam"]');const NODES={};const ROUTE={adapter:"#36E2FF",native:"#9D4DFF",cloud:"#FF6A00",local:"#FF2E88"};let core=[640,250];if(csv){const tr=beam&&beam.parentNode.getAttribute("transform"),m=tr&&tr.match(/translate\(([-\d.]+)[ ,]+([-\d.]+)/);if(m)core=[+m[1],+m[2]];$$("[data-id]",csv).forEach(g=>{const c=$("circle",g),tx=$("text",g);NODES[g.dataset.id]={g,c,tx,a:+g.dataset.angle,x:+c.getAttribute("cx"),y:+c.getAttribute("cy"),col:c.getAttribute("fill")};});}
+const PFX=D.p.map(r=>({pre:r[0],id:r[1],name:r[2],route:r[3],wire:r[4]})).concat(D.u.map(pre=>({pre,un:1}))).sort((a,b)=>b.pre.length-a.pre.length);const ALLP=PFX.map(r=>r.pre).concat(D.r.map(r=>r[0]),["sk-","localhost"],Object.keys(D.lw));function detect(t){t=t.trim();if(!t)return{k:"empty"};const lo=t.toLowerCase();if(D.lw[lo])return{k:"local",ids:[D.lw[lo]],pre:t};if(/^(localhost|127\.0\.0\.1|https?:\/\/(localhost|127\.))/.test(lo))return{k:"local",ids:D.g.local,pre:t.slice(0,9)==="localhost"?"localhost":t,all:1};for(const[pre,note]of D.r)if(t.startsWith(pre))return{k:"rej",pre,note};for(const r of PFX)if(t.startsWith(r.pre))return r.un?{k:"un",pre:r.pre}:Object.assign({k:"key"},r);if(t.startsWith("sk-"))return{k:"amb",pre:"sk-",ids:D.amb};if(ALLP.some(p=>p.startsWith(t)))return{k:"part"};return{k:"none"};}
+let raw="";function shown(v){let n=0;while(n<v.length&&ALLP.some(p=>p.startsWith(v.slice(0,n+1))))n++;const r=detect(v),keep=r.pre&&v.startsWith(r.pre)?Math.max(n,r.pre.length):n;return v.slice(0,keep)+"•".repeat(v.length-keep);}
+function setRaw(v,src){raw=v.slice(0,12);const s=keyIn.selectionStart;keyIn.value=shown(raw);if(src!=="chip")try{keyIn.setSelectionRange(s,s);}catch(e){}
+run(detect(raw));}
+keyIn.addEventListener("beforeinput",e=>{const t=e.inputType;if(e.isComposing)return;const a=keyIn.selectionStart,b=keyIn.selectionEnd;let v=raw,pos=a;if(t.startsWith("insert")){const d=(e.data!=null?e.data:e.dataTransfer?e.dataTransfer.getData("text"):"").replace(/\s+/g,"");v=raw.slice(0,a)+d+raw.slice(b);pos=a+d.length;}
+else if(t==="deleteContentBackward"){if(a===b&&a>0){v=raw.slice(0,a-1)+raw.slice(b);pos=a-1;}else v=raw.slice(0,a)+raw.slice(b);}
+else if(t==="deleteContentForward"){v=a===b?raw.slice(0,a)+raw.slice(a+1):raw.slice(0,a)+raw.slice(b);}
+else if(t.startsWith("delete")){v=raw.slice(0,a)+raw.slice(b);}
+else return;e.preventDefault();setRaw(v);pos=Math.min(pos,raw.length);try{keyIn.setSelectionRange(pos,pos);}catch(er){}});keyIn.addEventListener("input",()=>{if(keyIn.value.indexOf("•")<0&&keyIn.value!==raw)setRaw(keyIn.value.replace(/\s+/g,""));});function wipe(){raw="";keyIn.value="";}
+keyIn.addEventListener("blur",wipe);keyIn.addEventListener("focus",()=>keyIn.select());document.addEventListener("visibilitychange",()=>{if(document.hidden)wipe();});$$(".presets .chipb").forEach(b=>b.addEventListener("click",()=>{setRaw(b.dataset.k,"chip");}));const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]);const AR='<span class="ar"> → </span>',CORE="Pulsar Core "+D.core;function readout(r){const pf=(p,c)=>'<span class="pf" style="--rc:'+c+'">'+esc(p)+"</span>";if(r.k==="key"){const c=ROUTE[r.route],tail=r.route==="cloud"?" · cloud"+AR+"Claude Code talks to the cloud directly":" · "+r.route+" · "+r.wire+" wire"+AR+CORE;return pf(r.pre,c)+AR+"<b>"+esc(r.name)+"</b>"+tail;}
+if(r.k==="local")return pf(r.pre,ROUTE.local)+AR+"<b>"+(r.all?"local engines":esc(D.names[r.ids[0]]))+"</b> · local · no key"+AR+CORE+
+'<span class="why">'+(r.all?"Servers on your machine are found on loopback: Ollama, LM Studio, llama.cpp, vLLM, Jan, LocalAI.":"Type it at the key prompt; the server is found on loopback.")+"</span>";if(r.k==="rej")return'<span class="bad">'+esc(r.pre)+" · refused</span>"+'<span class="why">'+esc(r.note)+" Pulsar Code will not use it.</span>";if(r.k==="amb")return pf("sk-",ASH)+AR+"<b>several vendors use this shape</b>"+'<span class="why">Pulsar Code asks you to choose: '+r.ids.map(i=>esc(D.names[i])).join(", ")+", instead of trying the key against several vendors.</span>";if(r.k==="un")return pf(r.pre,ASH)+AR+"<b>recognised</b>"+'<span class="why">Not one of the listed provider profiles.</span>';if(r.k==="part")return"Listening… prefixes are matched longest first.";if(r.k==="none")return"No known prefix."+'<span class="why">The CLI also accepts a URL, an <b>export VAR=…</b> line or <b>ollama</b>.</span>';return"Waiting for a prefix. Try <b>sk-or-</b> or the fake key.";}
+let lastSig="";function run(r){const sig=r.k+(r.id||r.pre||"");if(sig===lastSig)return;lastSig=sig;ro.innerHTML=readout(r);if(!csv)return;if(r.k==="key"&&NODES[r.id]){aimAt([r.id],true);buzz([6,30,10]);}
+else if((r.k==="local"||r.k==="amb")&&r.ids){aimAt(r.ids.filter(i=>NODES[i]),r.ids.length===1);buzz([6,30,10]);}
+else if(r.k==="rej"){shake(BAD);clearSel();}
+else if(r.k==="empty"||r.k==="none")clearSel();}
+const W1MS=W1/1000;const WIN=4/W1*1000;let orbitAnim=null,orbitT0=0,orbitA=A0,mode="rest",bA=A0,bV=0,tgt=A0,idleT=0,flares=[],sel=[],cVis=false;const now=()=>document.timeline.currentTime||performance.now();const setBeam=a=>{bA=a;if(beam)beam.style.rotate=a.toFixed(3)+"deg";};function orbitAngle(){return orbitA+(now()-orbitT0)*W1MS;}
+function stopOrbit(){if(orbitAnim){bA=orbitAngle();orbitAnim.cancel();orbitAnim=null;}flares.forEach(a=>a.cancel());flares=[];}
+function orbit(from){stopOrbit();setBeam(from);if(reduced||!beam||!cVis){mode="rest";return;}
+mode="orbit";orbitA=from;orbitT0=now();orbitAnim=beam.animate([{rotate:from+"deg"},{rotate:from+360+"deg"}],{duration:P1,iterations:Infinity});orbitAnim.startTime=orbitT0;const hold=2*WIN/HP;for(const id in NODES){if(sel.includes(id))continue;const n=NODES[id],first=((((n.a-from)%180)+180)%180)/W1MS,st=orbitT0+first-WIN-HP;const o={duration:HP,iterations:Infinity};const a1=n.c.animate([{offset:0,scale:"1.875"},{offset:hold,scale:"1.875",easing:E_IMPACT},{offset:hold+.06,scale:"1.15"},{offset:.18,scale:"1"},{offset:1,scale:"1"}],o);const a2=n.tx.animate([{offset:0,fill:ICE},{offset:hold,fill:ICE,easing:E_IMPACT},{offset:.18,fill:ASH},{offset:1,fill:ASH}],o);a1.startTime=st;a2.startTime=st;flares.push(a1,a2);}}
+function clearSel(){sel.forEach(id=>{const n=NODES[id];n.c.getAnimations().forEach(a=>a.cancel());n.tx.getAnimations().forEach(a=>a.cancel());});sel=[];$$(".lk,.hl",csv).forEach(l=>l.remove());}
+function link(n,dashed){const NS="http://www.w3.org/2000/svg",l=document.createElementNS(NS,"line"),h=document.createElementNS(NS,"circle");l.setAttribute("class","lk");l.setAttribute("x1",core[0]);l.setAttribute("y1",core[1]);l.setAttribute("x2",n.x);l.setAttribute("y2",n.y);l.setAttribute("stroke",n.col);const len=Math.hypot(n.x-core[0],n.y-core[1]);l.setAttribute("stroke-dasharray",dashed?"3 5":len+" "+len);h.setAttribute("class","hl");h.setAttribute("cx",n.x);h.setAttribute("cy",n.y);h.setAttribute("r",11);h.setAttribute("stroke",n.col);n.g.parentNode.insertBefore(l,n.g.parentNode.firstChild.nextSibling);n.g.after(h);if(!reduced){if(!dashed)l.animate([{strokeDashoffset:len},{strokeDashoffset:0}],{duration:400,easing:E_SETTLE,fill:"both"});else l.animate([{opacity:0},{opacity:1}],{duration:400,easing:E_SETTLE,fill:"both"});h.animate([{opacity:.9,scale:".4"},{opacity:.55,scale:"1"}],{duration:620,easing:E_COOL,fill:"both"});}else h.style.opacity=.55;h.style.transformBox="fill-box";h.style.transformOrigin="50% 50%";}
+function flare(n){n.c.getAnimations().forEach(a=>a.cancel());n.tx.getAnimations().forEach(a=>a.cancel());const f={duration:reduced?0:620,easing:E_COOL,fill:"forwards"};n.c.animate([{scale:"2.4",fill:"#FFFFFF"},{offset:.06,scale:"2.4",fill:"#FFFFFF"},{offset:.35,fill:"#FFE9F6"},{scale:"1.9",fill:n.col}],f);n.tx.animate([{fill:"#FFFFFF"},{offset:.35,fill:"#FFE9F6"},{fill:ICE}],f);}
+function shake(col){if(reduced)return;const k=[[0,0],[-3,1.5],[2.5,-2],[-2,1],[1.5,-.5],[-.75,.5],[.3,-.2],[0,0]],o=[0,.07,.16,.27,.40,.55,.72,1];cam.animate(k.map((p,i)=>({offset:o[i],transform:"translate("+p[0]+"px,"+p[1]+"px)"})),{duration:420});if(col)cfig.animate([{boxShadow:"inset 0 0 0 1px "+col},{boxShadow:"inset 0 0 0 1px transparent"}],{duration:600,easing:E_SETTLE});}
+function aimAt(ids,swing){clearSel();clearTimeout(idleT);const wasOrbit=mode==="orbit";stopOrbit();sel=ids.slice();if(ids.length===1)centrePan(NODES[ids[0]].x);ids.forEach(id=>{flare(NODES[id]);link(NODES[id],!swing);});if(swing&&ids.length){const a=NODES[ids[0]].a,d=((((a-bA)%180)+270)%180)-90;tgt=bA+d;if(reduced){setBeam(tgt);mode="rest";}
+else{if(wasOrbit)bV=W1MS;mode="spring";shake();want(spring);}}else if(!reduced&&mode!=="spring"){mode="hold";}
+idleT=setTimeout(resume,4000);}
+let lastS=0;function spring(t){if(mode!=="spring")return false;const dt=Math.min(32,lastS?t-lastS:16);lastS=t;const w=.018,z=.62;for(let i=0;i<4;i++){const h=dt/4,acc=-w*w*(bA-tgt)-2*z*w*bV;bV+=acc*h;bA+=bV*h;}
+setBeam(bA);if(Math.abs(bA-tgt)<.02&&Math.abs(bV)<.0005){setBeam(tgt);bV=0;lastS=0;mode="hold";return false;}
+return true;}
+let rs=0,rl=0;function resume(){clearSel();lastSig="";if(reduced||!cVis){orbit(bA);return;}
+mode="resume";rs=0;rl=0;want(ramp);}
+function ramp(t){if(mode!=="resume")return false;if(!rs)rs=rl=t;const p=Math.min(1,(t-rs)/1100),v=W1MS*p*p*(3-2*p);bA+=v*Math.min(32,t-rl);rl=t;setBeam(bA);if(p>=1){orbit(bA);return false;}
+return true;}
+const cpan=$("#cpan");function centrePan(x,jump){if(cpan&&cpan.scrollWidth>cpan.clientWidth)cpan.scrollTo({left:x/1280*cpan.scrollWidth-cpan.clientWidth/2,behavior:reduced||jump?"auto":"smooth"});}
+const pans=$$(".pan").map(p=>{const at=()=>{const m=p.scrollWidth-p.clientWidth,x=p.scrollLeft;return m<2?"none":x<2?"start":x>m-2?"end":"mid";};const f=()=>{p.dataset.at=at();};p.addEventListener("scroll",f,{passive:true});addEventListener("resize",f);return at;});function firstLayout(){setupDock();centrePan(640,1);const ats=pans.map(at=>at());$$(".pan").forEach((p,i)=>{p.dataset.at=ats[i];});}
+requestAnimationFrame(()=>setTimeout(firstLayout,0));if(csv){csv.setAttribute("aria-label",csv.getAttribute("aria-label")||"Provider constellation");seen(cfig,v=>{cVis=v;if(v&&mode!=="spring"&&mode!=="hold")orbit(bA);else if(!v){if(mode==="orbit")stopOrbit();if(mode!=="hold")mode="rest";}});}
+RM.addEventListener&&RM.addEventListener("change",e=>{reduced=e.matches;setupDock();if(reduced){stopOrbit();setBeam(bA);}else if(cVis)orbit(bA);});window.PC={$,$$,D,ICE,ASH,clamp,want,seen,say,tabs,rm:()=>reduced};let moreOn=0;function more(){if(moreOn)return;moreOn=1;mio.disconnect();const sc=document.createElement("script");sc.src=$("#more").dataset.src;document.body.append(sc);}
+const mio=new IntersectionObserver(es=>{if(es.some(e=>e.isIntersecting))more();},{rootMargin:"900px 0px"});["#player","#sandbox"].forEach(s=>{const el=$(s);mio.observe(el);el.addEventListener("pointerdown",more,{once:true});el.addEventListener("focusin",more,{once:true});});})();</script><!-- js:end -->
+</body>
+</html>

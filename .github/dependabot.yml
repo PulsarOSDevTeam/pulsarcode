@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 PulsarOS Intelligence Inc.
+#
+# Weekly dependency updates. GitHub Actions are pinned by commit SHA in the workflows;
+# Dependabot bumps the SHA and the version comment together.
+#
+# Version-update pull requests are held (limit 0) until the first public release, when the test
+# workflow can run on them. The limit does not apply to security updates.
+
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: deps
+    groups:
+      runtime:
+        patterns: ['*']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: npm
+    directory: /packaging/npm
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: npm

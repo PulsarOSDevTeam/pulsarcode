@@ -1,0 +1,16 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 PulsarOS Intelligence Inc.
+#
+# PULSAR_PYTHON for the demo recordings. The ./pulsarcode launcher runs
+#   $PULSAR_PYTHON -E -B -c <bootstrap> <app> pulsar ARGS...
+# and this shim runs pinned_boot.py instead of <bootstrap>, which does the same sys.path setup and
+# then pins the hardware probe to a fixed illustrative machine, so the boot asset never publishes
+# the recording machine's CPU, RAM or GPU and looks the same wherever it is recorded.
+# Any other invocation goes to the real interpreter untouched. DEMO_REAL_PYTHON is that interpreter.
+real=${DEMO_REAL_PYTHON:?pinned_python: set DEMO_REAL_PYTHON}
+if [ "$#" -ge 5 ] && [ "$1" = -E ] && [ "$2" = -B ] && [ "$3" = -c ]; then
+    shift 4
+    exec "$real" -E -B "$(dirname "$0")/pinned_boot.py" "$@"
+fi
+exec "$real" "$@"

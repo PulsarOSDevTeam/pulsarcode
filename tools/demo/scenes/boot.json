@@ -1,0 +1,24 @@
+{
+  "alt": "Pulsar Code boot sequence: the wordmark decrypts, beams sweep, and the SYSTEMS panel checks uplink, model catalog, Pulsar Core and hardware",
+  "title": "pulsarcode demo",
+  "cols": 100,
+  "rows": 30,
+  "cmd": ["./pulsarcode", "demo"],
+  "env": {"PULSAR_SEED": "7"},
+  "duration": 8.0,
+  "fps": 12,
+  "start_at": "PULSAR CODE",
+  "keep_until_last": "ALL SYSTEMS NOMINAL",
+  "max_frames": 60,
+  "hold_last": 3.0,
+  "glow": true,
+  "colour_step": 16,
+  "budget": {"svg_kb": 650, "gzip_kb": 120, "elements": 16000},
+  "camera": [
+    [["first:ALL SYSTEMS NOMINAL", -0.1], 1.0, 50, 15, "SETTLE"],
+    [["first:ALL SYSTEMS NOMINAL", 0.5], 1.15, 50, 20, "SETTLE"],
+    [["first:ALL SYSTEMS NOMINAL", 1.4], 1.15, 50, 20, "SETTLE"],
+    [["first:ALL SYSTEMS NOMINAL", 2.3], 1.0, 50, 15, "GLIDE"]
+  ],
+  "lead": 0.6
+}

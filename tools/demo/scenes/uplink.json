@@ -1,0 +1,63 @@
+{
+  "alt": "Pulsar Code key setup: the obviously fake key sk-or-v1-fake-key-not-real is typed and shown masked, OpenRouter is detected from its shape, and the demo upstream answers with LINK ESTABLISHED",
+  "title": "pulsarcode key",
+  "cols": 100,
+  "rows": 30,
+  "cmd": ["./pulsarcode", "key"],
+  "env": {"PULSAR_SEED": "11"},
+  "sync": [[1.8, "Connect any intelligence."]],
+  "duration": 9.6,
+  "fps": 12,
+  "start_at": "Connect any intelligence.",
+  "keep_until_last": "LINK ESTABLISHED",
+  "max_frames": 50,
+  "hold_last": 1.2,
+  "budget": {"svg_kb": 650, "gzip_kb": 120, "elements": 16000},
+  "type": [[2.5, "sk-or-v1-fake-key-not-real\r"]],
+  "demo": true,
+  "camera": [
+    [["first:detected", -0.25], 1.0, 50, 15, "SETTLE"],
+    [["first:detected", 0.35], 1.3, 42, 9, "SETTLE"],
+    [["first:Handshake", -0.2], 1.3, 42, 9, "SETTLE"],
+    [["first:Handshake", 0.7], 1.0, 50, 15, "GLIDE"]
+  ],
+  "captions": [
+    [["first:detected", 0.1], ["first:Handshake", -0.25], "Recognised by key shape, offline", "detected"],
+    [
+      ["first:LINK ESTABLISHED", 0.0],
+      ["end", 1.0],
+      "demo upstream answers",
+      "LINK ESTABLISHED",
+      {"poster": true}
+    ]
+  ],
+  "typed_keys": [
+    [2.75, "s"],
+    [2.802, "k"],
+    [2.89, "-"],
+    [2.946, "o"],
+    [2.983, "r"],
+    [3.063, "-"],
+    [3.102, "v"],
+    [3.164, "1"],
+    [3.234, "-"],
+    [3.29, "f"],
+    [3.333, "a"],
+    [3.366, "k"],
+    [3.409, "e"],
+    [3.466, "-"],
+    [3.521, "k"],
+    [3.574, "e"],
+    [3.685, "y"],
+    [3.733, "-"],
+    [3.781, "n"],
+    [3.852, "o"],
+    [3.93, "t"],
+    [4.017, "-"],
+    [4.106, "r"],
+    [4.144, "e"],
+    [4.174, "a"],
+    [4.243, "l"],
+    [4.663, "\r"]
+  ]
+}

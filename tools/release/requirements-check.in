@@ -1,0 +1,9 @@
+# Release-artifact checks (twine check). Pinned to the twine and packaging versions bundled
+# by the pypa/gh-action-pypi-publish release used in release.yml (v1.13.0: twine 6.1.0,
+# packaging 25.0, readme-renderer 44.0, docutils 0.22, nh3 0.3.0), so a metadata problem
+# the publish step would hit fails here first. Bump together with that action.
+twine==6.1.0
+packaging==25.0
+readme-renderer==44.0
+docutils==0.22
+nh3==0.3.0

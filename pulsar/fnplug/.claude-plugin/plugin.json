@@ -1,0 +1,11 @@
+{
+  "name": "pulsar-stage",
+  "version": "3.0.0",
+  "description": "Pulsar Stage as a live, animated pane inside Claude Code: slides, charts and diagrams the model presents, drawn from Pulsar Core.",
+  "author": {
+    "name": "PulsarOS Intelligence Inc.",
+    "url": "https://github.com/PulsarOSDevTeam/pulsarcode"
+  },
+  "license": "AGPL-3.0-or-later",
+  "types": "./types/index.d.ts"
+}

@@ -1,0 +1,33 @@
+{
+  "alt": "Pulsar Stage viewer showing a scripted sample deck (demo data): five slides from a title slide through bullets, a bar chart and a flow diagram to a timeline",
+  "title": "pulsarcode stage",
+  "cols": 100,
+  "rows": 30,
+  "cmd": ["sh", "-c", "exec ./pulsarcode stage --sid \"$DEMO_SID\""],
+  "env": {"PULSAR_SEED": "9"},
+  "keys": [[5.0, "\u001b[C"], [7.4, "\u001b[C"], [9.8, "\u001b[C"], [12.2, "\u001b[C"]],
+  "sync": [[2.2, "orbit 2.0"]],
+  "duration": 14.2,
+  "fps": 10,
+  "start_at": "what ships, and when",
+  "max_frames": 48,
+  "hold_last": 2.5,
+  "budget": {"svg_kb": 650, "gzip_kb": 120, "elements": 16000},
+  "captions": [
+    [
+      ["first:orbit 2.0", 0.2],
+      ["end", 2.2],
+      "a scripted sample deck, as the model would present it",
+      "PULSAR STAGE",
+      {"poster": true}
+    ]
+  ],
+  "demo": true,
+  "spawn": [
+    [
+      "T R A N S M I S S I O N",
+      0.6,
+      "exec \"$PULSAR_PYTHON\" -E -B \"$DEMO_FIX/post_scene.py\" \"$DEMO_STATE\" deck"
+    ]
+  ]
+}

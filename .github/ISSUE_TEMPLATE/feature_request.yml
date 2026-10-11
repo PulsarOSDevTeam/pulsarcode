@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: Feature request
+description: Suggest an improvement. The maintainers decide the roadmap; see CONTRIBUTING.md.
+title: "feature: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Open-ended ideas and questions fit better in [Discussions](https://github.com/PulsarOSDevTeam/pulsarcode/discussions).
+        Please read [CONTRIBUTING.md](https://github.com/PulsarOSDevTeam/pulsarcode/blob/main/CONTRIBUTING.md): requests are read, but there is no promise to build them.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: The behaviour or command you have in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+  - type: input
+    id: provider
+    attributes:
+      label: Provider / model this concerns (if any)

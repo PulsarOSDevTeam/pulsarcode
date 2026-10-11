@@ -1,0 +1,311 @@
+{
+ "count": 36,
+ "prefixes": [
+  [
+   "bedrock-api-key-",
+   "bedrock",
+   "Amazon Bedrock",
+   "cloud",
+   "cloud"
+  ],
+  [
+   "sk-svcacct-",
+   "openai",
+   "OpenAI",
+   "adapter",
+   "chat"
+  ],
+  [
+   "sk-ant-api",
+   "anthropic",
+   "Anthropic",
+   "native",
+   "native"
+  ],
+  [
+   "sk-proj-",
+   "openai",
+   "OpenAI",
+   "adapter",
+   "chat"
+  ],
+  [
+   "sk-ant-",
+   "anthropic",
+   "Anthropic",
+   "native",
+   "native"
+  ],
+  [
+   "sk-api-",
+   "minimax",
+   "MiniMax",
+   "native",
+   "native"
+  ],
+  [
+   "tgp_v1_",
+   "together",
+   "Together AI",
+   "adapter",
+   "chat"
+  ],
+  [
+   "nvapi-",
+   "nvidia",
+   "NVIDIA NIM",
+   "adapter",
+   "chat"
+  ],
+  [
+   "sk-or-",
+   "openrouter",
+   "OpenRouter",
+   "adapter",
+   "chat"
+  ],
+  [
+   "sk-cp-",
+   "minimax",
+   "MiniMax",
+   "native",
+   "native"
+  ],
+  [
+   "vapi_",
+   "venice",
+   "Venice",
+   "adapter",
+   "chat"
+  ],
+  [
+   "AIza",
+   "gemini",
+   "Google Gemini",
+   "adapter",
+   "chat"
+  ],
+  [
+   "gsk_",
+   "groq",
+   "Groq",
+   "adapter",
+   "chat"
+  ],
+  [
+   "xai-",
+   "xai",
+   "xAI",
+   "adapter",
+   "chat"
+  ],
+  [
+   "csk-",
+   "cerebras",
+   "Cerebras",
+   "adapter",
+   "chat"
+  ],
+  [
+   "csk_",
+   "cerebras",
+   "Cerebras",
+   "adapter",
+   "chat"
+  ],
+  [
+   "tgp_",
+   "together",
+   "Together AI",
+   "adapter",
+   "chat"
+  ],
+  [
+   "vck_",
+   "vercel",
+   "Vercel AI Gateway",
+   "adapter",
+   "chat"
+  ],
+  [
+   "cpk_",
+   "chutes",
+   "Chutes",
+   "adapter",
+   "chat"
+  ],
+  [
+   "ABSK",
+   "bedrock",
+   "Amazon Bedrock",
+   "cloud",
+   "cloud"
+  ],
+  [
+   "AQ.",
+   "gemini",
+   "Google Gemini",
+   "adapter",
+   "chat"
+  ],
+  [
+   "fw_",
+   "fireworks",
+   "Fireworks AI",
+   "adapter",
+   "chat"
+  ],
+  [
+   "hf_",
+   "huggingface",
+   "Hugging Face",
+   "adapter",
+   "chat"
+  ]
+ ],
+ "unlisted": [
+  "sk-ant-oat"
+ ],
+ "reject": [
+  [
+   "sk-ant-admin",
+   "This is an Anthropic Admin API key."
+  ],
+  [
+   "sk-admin-",
+   "This is an OpenAI Admin key."
+  ],
+  [
+   "pplx-",
+   "This is a Perplexity key."
+  ],
+  [
+   "ghp_",
+   "This is a GitHub token."
+  ],
+  [
+   "gho_",
+   "This is a GitHub token."
+  ],
+  [
+   "ghu_",
+   "This is a GitHub token."
+  ],
+  [
+   "ghs_",
+   "This is a GitHub token."
+  ],
+  [
+   "ghr_",
+   "This is a GitHub token."
+  ],
+  [
+   "github_pat_",
+   "This is a GitHub token."
+  ],
+  [
+   "sk_live_",
+   "This is a Stripe key, not an AI provider key."
+  ],
+  [
+   "sk_test_",
+   "This is a Stripe key, not an AI provider key."
+  ],
+  [
+   "rk_live_",
+   "This is a Stripe key, not an AI provider key."
+  ],
+  [
+   "rk_test_",
+   "This is a Stripe key, not an AI provider key."
+  ]
+ ],
+ "ambiguous": [
+  "sk-"
+ ],
+ "groups": {
+  "local": [
+   "ollama",
+   "lmstudio",
+   "llamacpp",
+   "vllm",
+   "jan",
+   "localai"
+  ],
+  "native": [
+   "anthropic",
+   "deepseek",
+   "moonshot",
+   "zai",
+   "minimax",
+   "foundry"
+  ],
+  "cloud": [
+   "bedrock",
+   "vertex"
+  ],
+  "adapter": [
+   "nvidia",
+   "openrouter",
+   "openai",
+   "gemini",
+   "groq",
+   "xai",
+   "mistral",
+   "cerebras",
+   "together",
+   "fireworks",
+   "huggingface",
+   "deepinfra",
+   "sambanova",
+   "vercel",
+   "requesty",
+   "novita",
+   "dashscope",
+   "nebius",
+   "venice",
+   "chutes",
+   "cohere",
+   "azure"
+  ]
+ },
+ "names": {
+  "nvidia": "NVIDIA NIM",
+  "anthropic": "Anthropic",
+  "openrouter": "OpenRouter",
+  "openai": "OpenAI",
+  "gemini": "Google Gemini",
+  "groq": "Groq",
+  "xai": "xAI",
+  "deepseek": "DeepSeek",
+  "moonshot": "Moonshot Kimi",
+  "zai": "Z.ai GLM",
+  "minimax": "MiniMax",
+  "mistral": "Mistral",
+  "cerebras": "Cerebras",
+  "together": "Together AI",
+  "fireworks": "Fireworks AI",
+  "huggingface": "Hugging Face",
+  "deepinfra": "DeepInfra",
+  "sambanova": "SambaNova",
+  "vercel": "Vercel AI Gateway",
+  "requesty": "Requesty",
+  "novita": "Novita AI",
+  "dashscope": "Alibaba Qwen",
+  "nebius": "Nebius Token Factory",
+  "venice": "Venice",
+  "chutes": "Chutes",
+  "cohere": "Cohere",
+  "azure": "Azure OpenAI",
+  "foundry": "Azure AI Foundry (Claude)",
+  "bedrock": "Amazon Bedrock",
+  "vertex": "Google Vertex AI",
+  "ollama": "Ollama",
+  "lmstudio": "LM Studio",
+  "llamacpp": "llama.cpp",
+  "vllm": "vLLM",
+  "jan": "Jan",
+  "localai": "LocalAI"
+ },
+ "core": "127.0.0.1"
+}

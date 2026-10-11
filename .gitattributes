@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 PulsarOS Intelligence Inc.
+#
+# Line endings are fixed here, not left to core.autocrlf: Git for Windows checks text out with
+# CRLF by default, and a CRLF install.sh or pulsarcode shim fails in WSL and Git Bash
+# ($'\r': command not found, "set: pipefail: invalid option name"). Shell scripts, the shim and
+# Python stay LF on every checkout; Windows batch and PowerShell files get CRLF.
+
+* text=auto eol=lf
+
+*.sh         text eol=lf
+pulsarcode   text eol=lf
+*.py         text eol=lf
+*.js         text eol=lf
+*.rb         text eol=lf
+*.yml        text eol=lf
+*.toml       text eol=lf
+*.md         text eol=lf
+
+*.ps1        text eol=crlf
+*.cmd        text eol=crlf
+*.bat        text eol=crlf
+
+*.png        binary
+*.jpg        binary
+*.jpeg       binary
+*.gif        binary
+*.ico        binary
+*.webp       binary
+*.woff       binary
+*.woff2      binary
+*.gz         binary
+*.zip        binary
+*.whl        binary
+*.pyc        binary

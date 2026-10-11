@@ -1,0 +1,92 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: Bug report
+description: Something in Pulsar Code does not work as documented.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Please read [CONTRIBUTING.md](https://github.com/PulsarOSDevTeam/pulsarcode/blob/main/CONTRIBUTING.md) first.
+        **Never paste an API key.** Pulsar Code output masks keys, but check before you submit.
+        Security problems go to the address in [SECURITY.md](https://github.com/PulsarOSDevTeam/pulsarcode/blob/main/SECURITY.md), not here.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+      placeholder: |
+        1. Ran `pulsarcode` in a Python project
+        2. Picked qwen/qwen3-coder on OpenRouter
+        3. Claude Code showed "HTTP 400 ..." on the first tool call
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `pulsarcode doctor` (or `pulsarcode status --brief`)
+      description: Paste the full output. It contains no keys.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Pulsar Code version
+      description: Output of `pulsarcode version`.
+      placeholder: pulsarcode 3.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      # pipx / uv tool, npm, Homebrew, Scoop and release archives join this list with the first
+      # public release, when those channels exist.
+      options:
+        - curl installer (install.sh)
+        - PowerShell installer (install.ps1)
+        - From a clone (install.sh --local or install.ps1 -Local)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Provider
+      description: The provider the session used (as shown by `pulsarcode providers` or the HUD).
+      placeholder: OpenRouter, NVIDIA NIM, Ollama, a custom URL, ...
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      placeholder: qwen/qwen3-coder
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Linux (x86_64)
+        - Linux (arm64)
+        - WSL
+        - Windows
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal and Claude Code version
+      description: For example "iTerm2 3.5, claude 2.1.0" (`claude --version`).
+  - type: textarea
+    id: logs
+    attributes:
+      label: Pulsar Core log (optional)
+      description: Run with `PULSAR_LOG=1` and paste the relevant lines of `~/.pulsarcode/logs/`. Logs never contain prompts or keys.
+      render: text

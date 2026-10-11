@@ -1,0 +1,15 @@
+# pulsarcode runtime dependencies (pyproject.toml lists the same; tests/test_packaging.py checks).
+# Minimum-version pins for stability; upper bounds keep major-version breakage out of the supported
+# install path. Every package here and below it is pure Python (py3-none-any wheels): no compiler,
+# no Rust, so installs work on Homebrew, Termux, FreeBSD, riscv64, armv6 and Windows ARM64 alike.
+# The floors all support Python 3.9; resolvers pick newer releases on newer Pythons.
+
+# Core's HTTP layer: plain Starlette (routing, requests, responses, middleware). No FastAPI, no pydantic.
+starlette>=0.40,<2
+# Plain uvicorn: Core serves HTTP/1.1 and SSE on loopback with h11 and asyncio. The [standard]
+# extra (uvloop, httptools, websockets, watchfiles, python-dotenv, pyyaml) is not needed.
+uvicorn>=0.34,<1.0
+# [socks] adds socksio (pure Python), so a SOCKS proxy in ALL_PROXY (Clash, V2Ray) works.
+httpx[socks]>=0.28,<1.0
+# The OS trust store (corporate TLS inspection: Zscaler, Netskope); pulsar/netcfg.py uses it when present.
+truststore>=0.9; python_version >= '3.10'

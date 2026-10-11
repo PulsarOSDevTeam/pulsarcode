@@ -1,0 +1,451 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later
+   Copyright (C) 2026 PulsarOS Intelligence Inc.
+   Pulsar Code site, deferred part: the replay player and the Pilot sandbox. Loaded by the inline script
+   (tools/site/site.js) as docs/assets/site/more.js. Its only network call is fetch("./demo/<scene>.json") on play. */
+(() => {
+"use strict";
+const { $, $$, D, ICE, ASH, clamp, want, seen, say, tabs } = window.PC;
+const WARN = "#FFC400";
+const SPEC = [[255, 106, 0], [255, 46, 136], [157, 77, 255], [54, 226, 255]];
+const eOut = p => 1 - Math.pow(1 - clamp(p), 3);
+const eIO = p => (p = clamp(p), p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
+const eBack = p => (p = clamp(p) - 1, 1 + 2.9 * p * p * p + 1.9 * p * p);
+const mix = (a, b, f) => [0, 1, 2].map(i => Math.round(a[i] + (b[i] - a[i]) * f));
+const rgb = (c, a = 1) => "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a + ")";
+const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const grad = (cs, t) => { t = clamp(t); const s = t * (cs.length - 1), i = Math.min(cs.length - 2, s | 0); return mix(cs[i], cs[i + 1], s - i); };
+const tri = t => { t = ((t % 1) + 1) % 1; return t < .5 ? t * 2 : 2 - t * 2; };
+function bez(x1, y1, x2, y2) {
+  const B = (t, a, b) => 3 * a * t * (1 - t) * (1 - t) + 3 * b * t * t * (1 - t) + t * t * t;
+  return p => { if (p <= 0 || p >= 1) return clamp(p); let lo = 0, hi = 1; for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2; if (B(m, x1, x2) < p) lo = m; else hi = m; } return B((lo + hi) / 2, y1, y2); };
+}
+let reduced = window.PC.rm();
+/* ---------------- replay player ---------------- */
+const CW = 8.5, CH = 17, FS = 14, BASE = 13, BAR = 34, PADX = 16, PADY = 12, MAR = 16, BOX = 40, DIP = 300;
+const SCR_BG = "#0a0910", MONO = '"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,"DejaVu Sans Mono",monospace';
+const SANS = 'Inter,ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif';
+const EASE = { GLIDE: bez(.65, 0, .35, 1), SETTLE: bez(.16, 1, .3, 1) }, eShock = bez(.33, 1, .68, 1), eSoft = bez(.22, 1.2, .36, 1);
+const SHAKE = [[0, 0, 0], [7, -6, 3], [16, 5, -4], [27, -4, 2], [40, 3, -1], [55, -1.5, 1], [72, .6, -.4], [100, 0, 0]];
+const pl = $("#player"), scr = $("#pscreen"), cv = $("#pcv"), cx = cv.getContext("2d"), poster = $("#poster");
+const ppB = $("#pp"), scrub = $("#scrub"), tcEl = $("#tc"), camB = $("#camb"), ticksEl = $("#ticks"), altEl = $("#palt");
+const SC = {}; let scene = "session", S = null, playing = false, pt = 0, rate = 1, camOn = !reduced, pVis = false, lastP = 0, off = null, offI = -1, offK = 0;
+function mmss(s) { s = Math.max(0, Math.floor(s)); return String(s / 60 | 0).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); }
+function lay(d) {
+  const cols = d.cols, rows = d.rows, box = d.captions && d.captions.length ? BOX : 0;
+  const ww = cols * CW + 2 * PADX, sh = rows * CH + 2 * PADY;
+  const L = { cols, rows, box, wx: MAR, wy: MAR, ww, sx: MAR, sy: MAR + BAR, sw: ww, sh, wh: BAR + sh + box };
+  L.W = Math.ceil(ww + 2 * MAR); L.H = Math.ceil(L.wh + 2 * MAR + 6); L.ox = L.sx + PADX; L.oy = L.sy + PADY;
+  return L;
+}
+function camKey(L, z, col, row) {
+  z = Math.max(1, Math.min(1.8, z));
+  const ccx = L.ox + (col + .5) * CW, ccy = L.oy + (row + .5) * CH;
+  let tx = L.sx + L.sw / 2 - z * ccx, ty = L.sy + L.sh / 2 - z * ccy;
+  tx = Math.min(L.sx - z * L.sx, Math.max(L.sx + L.sw - z * (L.sx + L.sw), tx));
+  ty = Math.min(L.sy - z * L.sy, Math.max(L.sy + L.sh - z * (L.sy + L.sh), ty));
+  return [tx, ty, z];
+}
+function prep(d) {
+  d.L = lay(d); d.tEnd = d.frames[d.frames.length - 1].t; d.total = d.tEnd + (d.hold_last != null ? d.hold_last : 2) + DIP / 1000;
+  const tr = (d.camera || []).slice().sort((a, b) => a[0] - b[0]).map(k => [k[0]].concat(camKey(d.L, k[1], k[2], k[3]), [String(k[4] || "SETTLE").toUpperCase()]));
+  if (!tr.length || tr[0][0] > 0) tr.unshift([0, 0, 0, 1, "SETTLE"]);
+  d.track = tr; d.zmax = Math.max(1, ...tr.map(k => k[3]));
+  return d;
+}
+function camAt(d, t) {
+  const tr = d.track; if (!camOn || reduced || tr.length < 2) return [0, 0, 1];
+  if (t <= tr[0][0]) return tr[0].slice(1, 4);
+  for (let i = 1; i < tr.length; i++) { const a = tr[i - 1], b = tr[i];
+    if (t <= b[0]) { const e = (EASE[b[4]] || EASE.SETTLE)(b[0] > a[0] ? (t - a[0]) / (b[0] - a[0]) : 1); return [1, 2, 3].map(j => a[j] + (b[j] - a[j]) * e); } }
+  return tr[tr.length - 1].slice(1, 4);
+}
+function frameAt(d, t) { const F = d.frames; let lo = 0, hi = F.length - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (F[m].t <= t) lo = m; else hi = m - 1; } return lo; }
+
+/* cell renderer: block, braille, box and arc glyphs are drawn as geometry so they tile without seams */
+const A4 = [[0,1,0,1],[1,0,1,0],[0,1,1,0],[0,0,1,1],[1,1,0,0],[1,0,0,1],[1,1,1,0],[1,0,1,1],[0,1,1,1],[1,1,0,1],[1,1,1,1],[0,0,0,1],[1,0,0,0],[0,1,0,0],[0,0,1,0]];
+const ARMS = {}; [..."─│┌┐└┘├┤┬┴┼╴╵╶╷"].forEach((c, i) => ARMS[c] = A4[i]); [..."━┃┏┓┗┛┣┫┳┻╋╸╹╺╻"].forEach((c, i) => ARMS[c] = A4[i].map(v => v * 2)); [..."═║╔╗╚╝╠╣╦╩╬"].forEach((c, i) => ARMS[c] = A4[i].map(v => v * 3));
+const ARC = { "╭": [0, 1, 1, 0], "╮": [0, 0, 1, 1], "╯": [1, 0, 0, 1], "╰": [1, 1, 0, 0] };
+const QUAD = { "▖": "LL", "▗": "LR", "▘": "UL", "▝": "UR", "▙": "UL LL LR", "▚": "UL LR", "▛": "UL UR LL", "▜": "UL UR LR", "▞": "UR LL", "▟": "UR LL LR" };
+const TRI = { "◢": [[1, 0], [1, 1], [0, 1]], "◣": [[0, 0], [1, 1], [0, 1]], "◤": [[0, 0], [1, 0], [0, 1]], "◥": [[0, 0], [1, 0], [1, 1]] };
+function glyph(g, c, X, Y, cw, ch, fs, col, bold) {
+  const o = c.codePointAt(0); g.fillStyle = col; g.strokeStyle = col;
+  if (o >= 0x2580 && o <= 0x259f) {
+    if (c === "█") g.fillRect(X, Y, cw + .6, ch + .6);
+    else if (c === "▀") g.fillRect(X, Y, cw + .6, ch / 2);
+    else if (o >= 0x2581 && o <= 0x2587) { const h = ch * (o - 0x2580) / 8; g.fillRect(X, Y + ch - h, cw + .6, h + .6); }
+    else if (o >= 0x2589 && o <= 0x258f) g.fillRect(X, Y, cw * (0x2590 - o) / 8, ch + .6);
+    else if (c === "▐") g.fillRect(X + cw / 2, Y, cw / 2 + .6, ch + .6);
+    else if ("░▒▓".includes(c)) { g.globalAlpha = { "░": .25, "▒": .5, "▓": .75 }[c]; g.fillRect(X, Y, cw + .6, ch + .6); g.globalAlpha = 1; }
+    else if (QUAD[c]) for (const q of QUAD[c].split(" ")) g.fillRect(X + (q[1] === "L" ? 0 : cw / 2), Y + (q[0] === "U" ? 0 : ch / 2), cw / 2 + .6, ch / 2 + .6);
+    else g.fillRect(X, Y, cw, ch);
+    return;
+  }
+  if (TRI[c]) { const p = TRI[c]; g.beginPath(); g.moveTo(X + p[0][0] * cw, Y + p[0][1] * ch); g.lineTo(X + p[1][0] * cw, Y + p[1][1] * ch); g.lineTo(X + p[2][0] * cw, Y + p[2][1] * ch); g.fill(); return; }
+  if (o >= 0x2800 && o <= 0x28ff) {
+    const bits = o - 0x2800, P = [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[0,3],[1,3]], r = Math.max(.7, cw * .13);
+    for (let i = 0; i < 8; i++) if (bits & (1 << i)) { g.beginPath(); g.arc(X + cw * (.28 + .44 * P[i][0]), Y + ch * (.14 + .24 * P[i][1]), r, 0, 6.283); g.fill(); }
+    return;
+  }
+  const mx = X + cw / 2, my = Y + ch / 2, lt = Math.max(1, cw / 8.5), ht = lt * 2.2;
+  if (ARMS[c]) {
+    const [u, rt, d, l] = ARMS[c];
+    if (Math.max(u, rt, d, l) < 3) {
+      const w = v => v === 2 ? ht : lt;
+      if (u) g.fillRect(mx - w(u) / 2, Y, w(u), ch / 2 + w(u) / 2);
+      if (d) g.fillRect(mx - w(d) / 2, my - w(d) / 2, w(d), ch / 2 + w(d) / 2 + .6);
+      if (l) g.fillRect(X, my - w(l) / 2, cw / 2 + w(l) / 2, w(l));
+      if (rt) g.fillRect(mx - w(rt) / 2, my - w(rt) / 2, cw / 2 + w(rt) / 2 + .6, w(rt));
+    } else {
+      const of = Math.max(1.5, cw / 6), U = u === 3, R = rt === 3, Dn = d === 3, Lf = l === 3;
+      const hl = (a, b, yy) => g.fillRect(Math.min(a, b), yy - lt / 2, Math.abs(b - a), lt), vl = (a, b, xx) => g.fillRect(xx - lt / 2, Math.min(a, b), lt, Math.abs(b - a));
+      if (R) { hl(U ? mx + of : mx - of, X + cw + .6, my - of); hl(Dn ? mx + of : mx - of, X + cw + .6, my + of); }
+      if (Lf) { hl(X, U ? mx - of : mx + of, my - of); hl(X, Dn ? mx - of : mx + of, my + of); }
+      if (Dn) { vl(Lf ? my + of : my - of, Y + ch + .6, mx - of); vl(R ? my + of : my - of, Y + ch + .6, mx + of); }
+      if (U) { vl(Y, Lf ? my - of : my + of, mx - of); vl(Y, R ? my - of : my + of, mx + of); }
+    }
+    return;
+  }
+  if (ARC[c]) {
+    const [u, rt, d, l] = ARC[c], r = Math.min(cw, ch) / 2, ax = mx + (rt ? r : -r), ay = my + (d ? r : -r);
+    const st = rt && d ? Math.PI : !rt && d ? 1.5 * Math.PI : !rt && !d ? 0 : .5 * Math.PI;
+    g.lineWidth = lt; g.beginPath(); g.arc(ax, ay, r, st, st + Math.PI / 2); g.stroke();
+    if (d) g.fillRect(mx - lt / 2, ay, lt, Y + ch - ay + .6); if (u) g.fillRect(mx - lt / 2, Y, lt, ay - Y);
+    if (rt) g.fillRect(ax, my - lt / 2, X + cw - ax + .6, lt); if (l) g.fillRect(X, my - lt / 2, ax - X, lt);
+    return;
+  }
+  g.font = (bold ? "700 " : "400 ") + fs + "px " + MONO;
+  const w = g.measureText(c).width, y = Y + BASE / CH * ch;
+  if (w > cw * 1.15 && o > 0x2e7f) { g.save(); g.translate(X, 0); g.scale(cw * 1.02 / w, 1); g.fillText(c, 0, y); g.restore(); }
+  else g.fillText(c, X + (cw - w) / 2, y);
+}
+function renderOff(d, i, k) {
+  const L = d.L, w = Math.ceil(L.cols * CW * k), h = Math.ceil(L.rows * CH * k);
+  if (!off) off = document.createElement("canvas");
+  if (off.width !== w || off.height !== h) { off.width = w; off.height = h; }
+  const g = off.getContext("2d"); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = SCR_BG; g.fillRect(0, 0, w, h); g.textBaseline = "alphabetic";
+  const cw = CW * k, ch = CH * k, fs = FS * k;
+  d.frames[i].rows.forEach((runs, y) => { for (const [x, text, col, bold] of runs) { let c0 = x; for (const c of text) { if (c !== " ") glyph(g, c, c0 * cw, y * ch, cw, ch, fs, col, bold); c0++; } } });
+  offI = i; offK = k;
+}
+function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+function spec(g, x0, x1) { const s = g.createLinearGradient(x0, 0, x1, 0); s.addColorStop(0, "#FF6A00"); s.addColorStop(.35, "#FF2E88"); s.addColorStop(.7, "#9D4DFF"); s.addColorStop(1, "#36E2FF"); return s; }
+function chipAt(g, right, y, text, col) {
+  g.font = "700 10px " + MONO; const w = g.measureText(text).width + 14;
+  rr(g, right - w, y, w, 18, 5); g.fillStyle = "#13101E"; g.fill(); g.strokeStyle = "rgba(255,255,255,.09)"; g.lineWidth = 1; g.stroke();
+  g.fillStyle = col; g.fillText(text, right - w + 7, y + 12.5); return right - w;
+}
+function drawP(t) {
+  const d = S, L = d.L, cssW = cv.clientWidth || scr.clientWidth - 24, sc = cssW / L.W, dpr = Math.min(1.5, devicePixelRatio || 1), K = sc * dpr;
+  const W = Math.round(L.W * K), H = Math.round(L.H * K);
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  const g = cx; g.setTransform(K, 0, 0, K, 0, 0); g.clearRect(0, 0, L.W, L.H);
+  const { wx, wy, ww, wh, sx, sy, sw, sh } = L;
+  [[2, 0, .22], [6, 3, .10], [12, 7, .05]].forEach(([dy, gr, op]) => { rr(g, wx - gr, wy + dy - gr, ww + 2 * gr, wh + 2 * gr, 12 + gr); g.fillStyle = "rgba(0,0,0," + op + ")"; g.fill(); });
+  rr(g, wx, wy, ww, wh, 12); g.fillStyle = SCR_BG; g.fill();
+  g.save(); rr(g, wx, wy, ww, BAR + 12, 12); g.clip(); g.fillStyle = "#0F0D18"; g.fillRect(wx, wy, ww, BAR); g.restore();
+  g.fillStyle = "rgba(255,255,255,.06)"; g.fillRect(wx, wy + BAR - 1, ww, 1);
+  /* pixel mark: core and one bipolar beam */
+  g.save(); g.translate(wx + 20, wy + BAR / 2); g.rotate(-.6); g.fillStyle = "#36E2FF"; g.fillRect(1, -1, 7, 2); g.fillStyle = "#9D4DFF"; g.fillRect(-8, -1, 7, 2); g.restore();
+  g.fillStyle = ICE; g.fillRect(wx + 18, wy + BAR / 2 - 2, 4, 4);
+  g.font = "400 12px " + MONO; g.fillStyle = ASH; g.textAlign = "center"; g.fillText(d.title || "pulsarcode", wx + ww / 2, wy + BAR / 2 + 4.2); g.textAlign = "left";
+  const tc = mmss(Math.min(t, d.tEnd)); g.font = "400 12px " + MONO; const tw = g.measureText("00:00").width; g.fillStyle = ASH; g.fillText(tc, wx + ww - 16 - tw, wy + BAR / 2 + 4.2);
+  let right = wx + ww - 16 - tw - 10;
+  if (d.demo) right = chipAt(g, right, wy + BAR / 2 - 9, "DEMO", WARN) - 6;
+  chipAt(g, right, wy + BAR / 2 - 9, "REPLAY", ASH);
+  /* screen */
+  const i = frameAt(d, t), cam3 = camAt(d, t), z = cam3[2];
+  const k = K * (camOn && !reduced ? d.zmax : 1);
+  if (offI !== i || Math.abs(offK - k) > .01) renderOff(d, i, k);
+  g.save(); g.beginPath(); g.rect(sx, sy, sw, sh); g.clip();
+  g.fillStyle = SCR_BG; g.fillRect(sx, sy, sw, sh);
+  let shx = 0, shy = 0, ring = null;
+  if (!reduced) for (const te of d.enters || []) { const p = (t - te) / .42; if (p >= 0 && p < 1) {
+    for (let j = 1; j < SHAKE.length; j++) if (p * 100 <= SHAKE[j][0]) { const a = SHAKE[j - 1], b = SHAKE[j], f = (p * 100 - a[0]) / (b[0] - a[0]); shx = (a[1] + (b[1] - a[1]) * f) * .33; shy = (a[2] + (b[2] - a[2]) * f) * .33; break; }
+    ring = p; } }
+  g.translate(shx, shy); g.translate(cam3[0], cam3[1]); g.scale(z, z);
+  g.imageSmoothingQuality = "high";
+  g.drawImage(off, L.ox, L.oy, L.cols * CW, L.rows * CH);
+  const cu = d.cursor && d.cursor[i];
+  if (cu && !cu[2]) {
+    const hold = (i + 1 < d.frames.length ? d.frames[i + 1].t : d.total) - d.frames[i].t;
+    const on = hold <= .5 || ((t - d.frames[i].t) % 1.06) < .53;
+    if (on) { g.fillStyle = "rgba(236,246,255,.85)"; g.fillRect(L.ox + cu[0] * CW, L.oy + cu[1] * CH, CW, CH); }
+    if (ring != null) { const e = eShock(ring); g.strokeStyle = "rgba(236,246,255," + (.8 * (1 - ring)) + ")"; g.lineWidth = 1.5 / (.2 + .8 * e);
+      g.beginPath(); g.arc(L.ox + (cu[0] + .5) * CW, L.oy + (cu[1] + .5) * CH, 12 * (.2 + .8 * e), 0, 6.283); g.stroke(); }
+  }
+  g.restore();
+  g.save(); g.beginPath(); g.rect(sx, sy, sw, sh); g.clip();
+  if (playing && t > d.total - DIP / 1000) { /* the loop dips to black; paused or scrubbed to the end, the last frame stays */ g.globalAlpha = EASE.SETTLE((t - (d.total - DIP / 1000)) / (DIP / 1000)); g.fillStyle = SCR_BG; g.fillRect(sx, sy, sw, sh); g.globalAlpha = 1; }
+  g.globalAlpha = .85; g.fillStyle = spec(g, sx, sx + sw); g.fillRect(sx, sy + sh - 2, sw * clamp(t / d.total), 2); g.globalAlpha = 1;
+  g.restore();
+  /* captions in the letterbox */
+  if (L.box) {
+    g.fillStyle = "rgba(255,255,255,.05)"; g.fillRect(sx, sy + sh, sw, 1);
+    const cy = sy + sh + L.box / 2;
+    for (const c of d.captions) {
+      const t0 = c[0], t1 = c[1], pst = c[4] && c[4].poster; let a = 0, dy = 0;
+      if (reduced) a = pst ? 1 : 0;
+      else if (t >= t0 && t < t0 + .3) { const p = (t - t0) / .3; a = clamp(p * 1.4); dy = 8 * (1 - eSoft(p)); }
+      else if (t >= t0 + .3 && t <= t1) a = 1;
+      else if (t > t1 && t < t1 + .18) a = 1 - (t - t1) / .18;
+      if (a <= 0) continue;
+      g.globalAlpha = a; g.font = "400 13px " + SANS; const tw2 = g.measureText(c[2]).width, pw = tw2 + 40, px = wx + ww / 2 - pw / 2, y0 = cy - 14 + dy;
+      rr(g, px, y0, pw, 28, 14); g.fillStyle = "rgba(19,16,30,.92)"; g.fill(); g.strokeStyle = "rgba(255,255,255,.08)"; g.lineWidth = 1; g.stroke();
+      const vg = g.createLinearGradient(0, y0 + 7, 0, y0 + 21); vg.addColorStop(0, "#FF6A00"); vg.addColorStop(.5, "#FF2E88"); vg.addColorStop(1, "#36E2FF");
+      rr(g, px + 11, y0 + 7, 3, 14, 1.5); g.fillStyle = vg; g.fill();
+      g.fillStyle = ICE; g.fillText(c[2], px + 22 + (pw - 36 - tw2) / 2, y0 + 18.5); g.globalAlpha = 1;
+    }
+  }
+  rr(g, wx + .75, wy + .75, ww - 1.5, wh - 1.5, 11.3); g.globalAlpha = .7; g.strokeStyle = spec(g, wx, wx + ww); g.lineWidth = 1.5; g.stroke(); g.globalAlpha = 1;
+  rr(g, wx + 2, wy + 2, ww - 4, wh - 4, 10); g.strokeStyle = "rgba(255,255,255,.06)"; g.lineWidth = 1; g.stroke();
+}
+function ui() {
+  const d = S, tot = d ? d.total : 0;
+  scrub.value = d ? Math.round(1000 * pt / tot) : 0;
+  scrub.setAttribute("aria-valuetext", d ? mmss(pt) + " of " + mmss(d.tEnd) : "not loaded");
+  tcEl.textContent = d ? mmss(Math.min(pt, d.tEnd)) + " / " + mmss(d.tEnd) : "--:-- / --:--";
+  ppB.textContent = playing ? "Pause" : "Play"; ppB.setAttribute("aria-label", playing ? "Pause" : "Play");
+}
+function pstep(nowT) {
+  if (!S || !playing || !pVis || document.hidden) { lastP = 0; return false; }
+  const dt = lastP ? Math.min(100, nowT - lastP) : 0; lastP = nowT;
+  pt += dt / 1000 * rate; if (pt >= S.total) pt %= S.total;
+  drawP(pt); ui(); return true;
+}
+async function load(name) {
+  if (SC[name]) return SC[name];
+  const r = await fetch("./demo/" + name + ".json"); if (!r.ok) throw new Error("replay " + name + ": " + r.status);
+  const d = prep(await r.json()); SC[name] = d; return d;
+}
+let loading = 0;
+async function play(on) {
+  if (on && !S) {
+    if (loading) return; loading = 1; ppB.textContent = "Loading";
+    try { await (document.fonts ? document.fonts.load("14px \"JetBrains Mono\"") : 0); S = await load(scene); pt = 0; }
+    catch (e) { loading = 0; say("This recording could not be loaded."); ui(); return; }
+    loading = 0; offI = -1; ticks();
+  }
+  if (!S) return;
+  playing = on; scr.classList.add("live");
+  drawP(pt); ui();
+  if (playing) { lastP = 0; want(pstep); }
+}
+function seek(t) { if (!S) return; pt = clamp(t, 0, S.total - .001); drawP(pt); ui(); }
+function stepF(n) { if (!S) return; playing = false; const i = clamp(frameAt(S, pt) + n, 0, S.frames.length - 1); seek(S.frames[i].t); }
+function ticks() { ticksEl.textContent = ""; if (!S) return; (S.captions || []).forEach(c => { const i = document.createElement("i"); i.style.left = 100 * c[0] / S.total + "%"; i.title = c[2]; ticksEl.append(i); }); }
+const ALT0 = altEl.textContent;
+tabs($(".ptabs"), t => {
+  const was = playing; scene = t.dataset.s; playing = false; S = SC[scene] || null; offI = -1; pt = S ? S.tEnd : 0;
+  scr.classList.remove("live"); scr.setAttribute("aria-labelledby", t.id);
+  poster.src = "demo/posters/" + scene + ".png"; poster.alt = "Last frame of the " + scene + " recording"; ticks(); ui();
+  altEl.textContent = (S && S.alt) || t.dataset.alt || ALT0;
+  if (was) play(true);
+});
+poster.addEventListener("load", () => { poster.width = poster.naturalWidth; poster.height = poster.naturalHeight; });
+ppB.addEventListener("click", () => play(!playing));
+$("#bigplay").addEventListener("click", () => play(true));
+scrub.addEventListener("input", () => { if (!S) { play(true); return; } seek(scrub.value / 1000 * S.total); });
+$$(".spd .ib").forEach(b => b.addEventListener("click", () => { rate = +b.dataset.r; $$(".spd .ib").forEach(x => x.setAttribute("aria-pressed", x === b)); }));
+camB.setAttribute("aria-pressed", camOn);
+camB.addEventListener("click", () => { camOn = !camOn; camB.setAttribute("aria-pressed", camOn); offI = -1; if (S) drawP(pt); });
+pl.addEventListener("keydown", e => {
+  const tg = e.target, k = e.key;
+  if (tg.getAttribute("role") === "tab" && /Arrow|Home|End/.test(k)) return;
+  if (tg.type === "range" && /Arrow/.test(k)) return;
+  if ((k === " " && tg.tagName !== "BUTTON") || k === "k" || k === "K") { e.preventDefault(); play(!playing); }
+  else if (k === "j" || k === "J") { e.preventDefault(); seek(pt - 1); }
+  else if (k === "l" || k === "L") { e.preventDefault(); seek(pt + 1); }
+  else if (k === "ArrowLeft" || k === ",") { e.preventDefault(); stepF(-1); ui(); }
+  else if (k === "ArrowRight" || k === ".") { e.preventDefault(); stepF(1); ui(); }
+});
+seen(scr, v => { pVis = v; if (v && playing) want(pstep); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && playing) want(pstep); });
+addEventListener("resize", () => { if (S && scr.classList.contains("live")) { offI = -1; drawP(pt); } });
+ui();
+
+/* ---------------- Pilot sandbox: a canvas port of pulsar/pilot/overlay.py ---------------- */
+const sb = $("#sandbox"), pc = $("#pcan"), pg = pc.getContext("2d");
+const C_ICE = hex(ICE), C_BEAM = hex("#36E2FF"), C_PLASMA = hex("#9D4DFF"), C_FLARE = hex("#FF2E88"), C_EMBER = hex("#FF6A00"), C_INK = [10, 9, 17], C_CHIP = [19, 16, 30], C_EDGE = [70, 52, 120];
+const RIP = D.rip;
+const OV = { x: 40, y: 40, vis: false, glides: [], fx: [], parts: [], chip: null, lock: null, beam: -.6, shown: 0, prev: [40, 40] };
+let sbW = 0, sbH = 0, sbVis = false, tour = null, idleSb = 0, sbBusy = false;
+const ts = () => performance.now() / 1000;
+const glideDur = (x1, y1, x2, y2) => .25 + .2 * Math.min(1, Math.hypot(x2 - x1, y2 - y1) / 900);
+function posAt(t) { const g = OV.glides[OV.glides.length - 1]; if (!g) return [OV.x, OV.y]; if (g[5] <= 0 || t >= g[4] + g[5]) return [g[2], g[3]]; const e = eIO((t - g[4]) / g[5]); return [g[0] + (g[2] - g[0]) * e, g[1] + (g[3] - g[1]) * e]; }
+const gliding = t => { const g = OV.glides[OV.glides.length - 1]; return !!g && t < g[4] + g[5]; };
+function show(t) { if (!OV.vis) { OV.vis = true; OV.shown = t; OV.glides = [[OV.x, OV.y, OV.x, OV.y, t, 0]]; } }
+function glideTo(x, y, t) { const [cx0, cy0] = posAt(t); let du = reduced ? 0 : glideDur(cx0, cy0, x, y); if (Math.hypot(x - cx0, y - cy0) < 2) du = 0; OV.glides = OV.glides.slice(-2).concat([[cx0, cy0, x, y, t, du]]); OV.x = x; OV.y = y; return du; }
+function chip(verb, label, t, ttl, tone) { OV.chip = { verb, label: String(label || "").split(/\s+/).join(" ").slice(0, RIP ? 48 : 48), t0: t, until: t + ttl, tone }; }
+function op(o, t) {
+  for (const f of OV.fx) if ((f.k === "keys" || f.k === "caret") && t > f.t0) f.dur = Math.min(f.dur, t - f.t0 + .12);
+  show(t);
+  if (o.op === "aim") { const du = glideTo(o.x, o.y, t); chip("click", o.label, t, du + 1.6, C_BEAM); const lk = reduced ? 0 : .16; OV.lock = { x: o.x, y: o.y, t0: t + du, dur: lk, until: t + du + lk + .6 }; return du + lk; }
+  if (o.op === "glide") { const du = glideTo(o.x, o.y, t); if (o.label) chip(o.verb || "move", o.label, t, du + 1.6, C_BEAM); return du; }
+  if (o.op === "click") {
+    OV.fx.push({ k: "ripple", x: o.x, y: o.y, t0: t, dur: reduced ? .32 : RIP.dur });
+    if (!reduced) for (let i = 0; i < 12; i++) { const a = 2 * Math.PI * (i + Math.random() * .6) / 12, sp = 90 + Math.random() * 140;
+      OV.parts.push({ x: o.x, y: o.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t0: t, life: .35 + Math.random() * .25, c: grad(SPEC, i / 11), s: 1.6 + Math.random() * 1.6 }); }
+    chip("click", o.label, t, 1.8, C_BEAM); OV.lock = null; return 0;
+  }
+  if (o.op === "type") { const du = Math.max(.6, Math.min(6, o.chars * .012 + .4)); OV.fx.push({ k: "caret", t0: t, dur: du }); chip("type", o.chars + " chars", t, du + .8, C_FLARE); return 0; }
+  if (o.op === "key") { OV.fx.push({ k: "keys", t0: t, dur: 1.5, caps: o.caps }); OV.fx.push({ k: "pulse", x: OV.x, y: OV.y, t0: t, dur: .4 }); OV.chip = null; return 0; }
+  if (o.op === "scan") { OV.fx.push({ k: "scan", t0: t, dur: reduced ? .2 : .55 }); chip("screenshot", Math.round(sbW) + "x" + Math.round(sbH), t, 1.6, C_BEAM); return 0; }
+  return 0;
+}
+function poly(pts, col) { pg.beginPath(); pg.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) pg.lineTo(pts[i][0], pts[i][1]); pg.closePath(); pg.fillStyle = col; pg.fill(); }
+const polar = (x, y, a, r, o = 0) => [x + Math.cos(a) * r - Math.sin(a) * o, y + Math.sin(a) * r + Math.cos(a) * o];
+function ring(x, y, r, col, w) { pg.beginPath(); pg.arc(x, y, Math.max(.1, r), 0, 6.2832); pg.strokeStyle = col; pg.lineWidth = w; pg.stroke(); }
+function disc(x, y, r, col) { pg.beginPath(); pg.arc(x, y, Math.max(.1, r), 0, 6.2832); pg.fillStyle = col; pg.fill(); }
+function lineP(pts, col, w) { pg.beginPath(); pg.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) pg.lineTo(pts[i], pts[i + 1]); pg.strokeStyle = col; pg.lineWidth = w; pg.lineCap = "round"; pg.lineJoin = "round"; pg.stroke(); }
+function rrect(x0, y0, x1, y1, r, fill, stroke, w) { rr(pg, x0, y0, x1 - x0, y1 - y0, Math.min(r, (x1 - x0) / 2, (y1 - y0) / 2)); if (fill) { pg.fillStyle = fill; pg.fill(); } if (stroke) { pg.strokeStyle = stroke; pg.lineWidth = w; pg.stroke(); } }
+function drawCore(x, y, t, s) {
+  if (s < .08) return;
+  const mv = gliding(t), g = OV.glides[OV.glides.length - 1];
+  if (mv && g && Math.hypot(g[2] - g[0], g[3] - g[1]) > 4) { const tg = Math.atan2(g[1] - g[3], g[0] - g[2]); const d = ((tg - OV.beam + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; OV.beam += d * .35; }
+  else if (!reduced) OV.beam += .03;
+  const br = reduced ? 0 : Math.sin(t * 4.2) * .9, st = mv ? 1.3 : 1, k = s;
+  [[C_FLARE, C_EMBER], [C_PLASMA, C_BEAM]].forEach(([c1, c2], j) => {
+    const a = OV.beam + j * Math.PI, base = 7 * k, tip = (38 + 4 * Math.sin(t * 3.1 + j * 1.7)) * k * st, half = 4.4 * k, mid = base + (tip - base) * .3, o = 1.7 + .5 * k;
+    poly([polar(x, y, a, base - o, half + o), polar(x, y, a, mid, half * .78 + o), polar(x, y, a, tip + o * 1.6), polar(x, y, a, mid, -half * .78 - o), polar(x, y, a, base - o, -half - o)], rgb(C_INK));
+    poly([polar(x, y, a, base, half), polar(x, y, a, mid, half * .78), polar(x, y, a, tip), polar(x, y, a, mid, -half * .78), polar(x, y, a, base, -half)], rgb(c1));
+    poly([polar(x, y, a, base, half * .5), polar(x, y, a, mid, half * .42), polar(x, y, a, tip * .8), polar(x, y, a, mid, -half * .42), polar(x, y, a, base, -half * .5)], rgb(c2));
+    const h0 = polar(x, y, a, base), h1 = polar(x, y, a, tip * .55); lineP([h0[0], h0[1], h1[0], h1[1]], rgb(mix(c2, C_ICE, .7)), Math.max(1, 1.3 * k));
+  });
+  const r = 15.5 * k + br * k; ring(x, y, r, rgb(C_INK), 3.6 * k + 3); disc(x, y, r - k, rgb(C_INK));
+  const spin = reduced ? 0 : -t * 60;
+  pg.lineCap = "butt";
+  for (let i = 0; i < 24; i++) { const a0 = (spin + i * 15) * Math.PI / 180; pg.beginPath(); pg.arc(x, y, r, a0, a0 + (15 - 4.5) * Math.PI / 180); pg.strokeStyle = rgb(grad(SPEC, tri(i * 2 / 24 + t * .25))); pg.lineWidth = 3.6 * k; pg.stroke(); }
+  const gl = .5 + .5 * Math.sin(t * 6); ring(x, y, r - 4.6 * k, rgb(mix(C_BEAM, C_ICE, .35 + .4 * gl)), Math.max(1, 1.4 * k));
+  disc(x, y, 6.6 * k, rgb(C_INK)); disc(x, y, 5 * k, rgb(mix(C_ICE, C_BEAM, .1 + .3 * gl))); disc(x, y, Math.max(1, 1.5 * k), rgb(C_INK));
+}
+function drawTrail(t) {
+  const g = OV.glides[OV.glides.length - 1]; if (!g || g[5] <= 0 || t > g[4] + g[5] + .1) return;
+  const n = 20, pts = []; for (let i = 0; i < n; i++) pts.push(posAt(t - .1 * i / (n - 1)));
+  let len = 0; for (let i = 0; i < n - 1; i++) len += Math.hypot(pts[i][0] - pts[i + 1][0], pts[i][1] - pts[i + 1][1]); if (len < 6) return;
+  const rows = pts.map((p, i) => { const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)], dx = a[0] - b[0], dy = a[1] - b[1], d = Math.hypot(dx, dy) || 1, f = 1 - i / (n - 1); return [p[0], p[1], -dy / d, dx / d, .3 + 8.5 * Math.pow(f, 1.8)]; });
+  poly(rows.map(([px, py, nx, ny, w]) => [px + nx * (w * 1.3 + .8), py + ny * (w * 1.3 + .8)]).concat(rows.slice().reverse().map(([px, py, nx, ny, w]) => [px - nx * (w * 1.3 + .8), py - ny * (w * 1.3 + .8)])), rgb(C_INK));
+  for (let i = 0; i < n - 1; i++) { const f = 1 - (i + .5) / (n - 1), c = grad([C_EMBER, C_FLARE, C_PLASMA, C_BEAM, C_ICE], Math.pow(f, .8)), p0 = rows[i], p1 = rows[i + 1];
+    poly([[p0[0] + p0[2] * p0[4], p0[1] + p0[3] * p0[4]], [p1[0] + p1[2] * p1[4], p1[1] + p1[3] * p1[4]], [p1[0] - p1[2] * p1[4], p1[1] - p1[3] * p1[4]], [p0[0] - p0[2] * p0[4], p0[1] - p0[3] * p0[4]]], rgb(c)); }
+  const hot = []; rows.slice(0, Math.max(2, n / 3 | 0)).forEach(r => hot.push(r[0], r[1])); lineP(hot, rgb(C_ICE), 2.2);
+}
+function drawRipple(f, t) {
+  const p = (t - f.t0) / f.dur, e = eOut(p), r = RIP.r0 + RIP.r1 * e, w = Math.max(1, RIP.stroke * (1 - p)), col = rgb(grad(SPEC, p));
+  if (w > 1.2) ring(f.x, f.y, r, rgb(C_INK), w + 3); ring(f.x, f.y, r, col, w);
+  const p2 = (t - f.t0 - RIP.inner_delay) / f.dur;
+  if (p2 >= 0 && p2 < 1 && !reduced) { const r2 = RIP.inner_r0 + RIP.inner_r1 * eOut(p2), w2 = Math.max(1, 3.2 * (1 - p2)); ring(f.x, f.y, r2, rgb(C_INK), w2 + 2.5); ring(f.x, f.y, r2, rgb(mix(C_ICE, C_BEAM, p2)), w2); }
+  if (p < RIP.flash_until) { const fr = RIP.flash_r * (1 - p / RIP.flash_until); disc(f.x, f.y, fr + 1.5, rgb(C_INK)); disc(f.x, f.y, fr, rgb(C_ICE)); }
+  if (!reduced && p > .06 && p < .8) { const q = (p - .06) / .74; for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + Math.PI / 8, r1 = 24 + 50 * eOut(q), r2 = r1 + 8 * (1 - q), a1 = polar(f.x, f.y, a, r1), a2 = polar(f.x, f.y, a, r2);
+    lineP([a1[0], a1[1], a2[0], a2[1]], rgb(C_INK), 4.5 * (1 - q) + 2); lineP([a1[0], a1[1], a2[0], a2[1]], rgb(grad(SPEC, i / 7)), Math.max(1, 2.4 * (1 - q))); } }
+}
+function drawReticle(lk, t) {
+  const p = lk.dur <= 0 ? 1 : Math.min(1, (t - lk.t0) / lk.dur), e = eOut(p), R = 40 - 18 * e, rot = Math.PI / 4 * (1 - e), leg = 9, col = rgb(mix(C_ICE, C_BEAM, .5 + .5 * Math.sin(t * 14)));
+  const cr = Math.cos(rot), sr = Math.sin(rot), P = (dx, dy) => [lk.x + dx * cr - dy * sr, lk.y + dx * sr + dy * cr];
+  for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { const pts = [].concat(P(sx * R, sy * (R - leg)), P(sx * R, sy * R), P(sx * (R - leg), sy * R)); lineP(pts, rgb(C_INK), 5.6); lineP(pts, col, 2.6); }
+}
+function drawCaret(f, t, x, y) {
+  const age = t - f.t0, pu = .5 + .5 * Math.sin(age * 14), cx0 = x + 27, h = 13, c = rgb(mix(C_BEAM, C_ICE, pu));
+  pg.fillStyle = rgb(C_INK); pg.fillRect(cx0 - 2.6, y - h - 1.6, 5.2, 2 * h + 3.2);
+  pg.fillStyle = c; pg.fillRect(cx0 - 1.3, y - h, 2.6, 2 * h); pg.fillRect(cx0 - 4.2, y - h - 1.6, 8.4, 3.2); pg.fillRect(cx0 - 4.2, y + h - 1.6, 8.4, 3.2);
+}
+function drawKeys(f, t, x, y) {
+  const age = t - f.t0, hgt = 24, pad = 9, gap = 5; pg.font = "700 11px " + MONO;
+  const ws = f.caps.map(n => Math.max(hgt, pg.measureText(n).width + 2 * pad)), tot = ws.reduce((a, b) => a + b, 0) + gap * (ws.length - 1);
+  let x0 = x + 30; const y0 = y - 58 < 8 ? y + 34 : y - 58; if (x0 + tot > sbW - 8) x0 = x - 30 - tot;
+  const fade = age < f.dur - .2 ? 1 : Math.max(0, (f.dur - age) / .2);
+  f.caps.forEach((n, i) => { const w = ws[i], p = eBack((age - i * .05) / .16);
+    if (p > .02) { const s = p * (.6 + .4 * fade), mx = x0 + w / 2, my = y0 + hgt / 2, hw = w / 2 * s, hh = hgt / 2 * s, tone = grad(SPEC, i / Math.max(1, f.caps.length - 1));
+      rrect(mx - hw - 2, my - hh - 2, mx + hw + 2, my + hh + 4, 7, rgb(C_INK)); rrect(mx - hw, my - hh + 2, mx + hw, my + hh + 2, 6, rgb(mix(tone, C_INK, .45)));
+      rrect(mx - hw, my - hh, mx + hw, my + hh, 6, rgb(C_CHIP), rgb(tone), 1.4);
+      if (s > .75) { pg.fillStyle = rgb(C_ICE); pg.textAlign = "center"; pg.textBaseline = "middle"; pg.fillText(n, mx, my + .5); pg.textAlign = "left"; pg.textBaseline = "alphabetic"; } }
+    x0 += w + gap; });
+}
+function drawScan(f, t) {
+  const p = (t - f.t0) / f.dur, y = eIO(p) * (sbH + 30) - 10;
+  if (!reduced) [[0, 2.4, C_ICE], [-4, 2, C_BEAM], [-9, 1.4, C_PLASMA], [-15, 1, C_FLARE], [-22, 1, C_EMBER]].forEach(([o, th, c]) => { const yy = y + o; if (yy > -4 && yy < sbH + 4) { pg.fillStyle = rgb(c); pg.fillRect(0, yy - th / 2, sbW, th); } });
+  const vis = Math.min(1, p / .15, (1 - p) / .15 + .0001), leg = 46 * Math.max(0, vis), ins = 14;
+  if (leg > 2) for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { const cx1 = sx > 0 ? ins : sbW - 1 - ins, cy1 = sy > 0 ? ins : sbH - 1 - ins, pts = [cx1, cy1 + sy * leg, cx1, cy1, cx1 + sx * leg, cy1]; lineP(pts, rgb(C_INK), 6); lineP(pts, rgb(C_BEAM), 3); }
+}
+function drawChip(x, y, t) {
+  const c = OV.chip, verb = c.verb.toUpperCase(), label = c.label, pad = 9, dot = 14, hgt = 24;
+  pg.font = "700 11px " + MONO; const wv = pg.measureText(verb).width; pg.font = "400 11px " + MONO; const wl = label ? pg.measureText(label).width : 0;
+  const w = pad + dot + wv + (label ? 8 + wl : 0) + pad; let cx1 = x + 26, cy1 = y + 24;
+  if (cx1 + w > sbW - 6) cx1 = x - 26 - w; if (cy1 + hgt > sbH - 6) cy1 = y - 24 - hgt;
+  const age = t - c.t0; cy1 += reduced ? 0 : 6 * (1 - eOut(age / .18));
+  rrect(cx1 - 1.8, cy1 - 1.8, cx1 + w + 1.8, cy1 + hgt + 1.8, 9, rgb(C_INK)); rrect(cx1, cy1, cx1 + w, cy1 + hgt, 8, rgb(C_CHIP), rgb(mix(C_ICE, C_EDGE, eOut(age / .3))), 1);
+  pg.fillStyle = rgb(c.tone); pg.fillRect(cx1 + 1, cy1 + hgt - 2.2, w - 2, 1.2);
+  const mx = cx1 + pad + 5, my = cy1 + hgt / 2 - .5; ring(mx, my, 5.2, rgb(mix(c.tone, C_ICE, .2)), 1.8); disc(mx, my, 2, rgb(C_ICE));
+  pg.textBaseline = "middle"; pg.font = "700 11px " + MONO; pg.fillStyle = rgb(c.tone); pg.fillText(verb, cx1 + pad + dot, my + .5);
+  if (label) { pg.font = "400 11px " + MONO; pg.fillStyle = rgb(C_ICE); pg.fillText(label, cx1 + pad + dot + wv + 8, my + .5); }
+  pg.textBaseline = "alphabetic";
+}
+function sbSize() {
+  const r = sb.getBoundingClientRect(), dpr = Math.min(1.5, devicePixelRatio || 1); sbW = r.width; sbH = r.height;
+  pc.width = Math.round(sbW * dpr); pc.height = Math.round(sbH * dpr); pg.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+function busy(t) { return OV.vis && (gliding(t) || OV.fx.length || OV.parts.length || t - OV.shown < .4 || (OV.chip && t < OV.chip.until) || (OV.lock && t < OV.lock.until)); }
+function pframe(t) {
+  OV.fx = OV.fx.filter(f => t < f.t0 + f.dur); OV.parts = OV.parts.filter(p => t < p.t0 + p.life);
+  if (OV.chip && t > OV.chip.until) OV.chip = null; if (OV.lock && t > OV.lock.until) OV.lock = null;
+  pg.clearRect(0, 0, sbW, sbH); if (!OV.vis) return;
+  const [x, y] = posAt(t);
+  if (gliding(t) && !reduced) { const vx = x - OV.prev[0], vy = y - OV.prev[1]; if (Math.hypot(vx, vy) > 3) for (let i = 0; i < 2; i++) { const a = Math.atan2(-vy, -vx) + (Math.random() - .5) * 1.4, sp = 60 + Math.random() * 120;
+    OV.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t0: t, life: .25 + Math.random() * .2, c: grad(SPEC, Math.random()), s: 1.2 + Math.random() * 1.4 }); } }
+  OV.prev = [x, y];
+  const s = t - OV.shown < .28 && !reduced ? eBack((t - OV.shown) / .28) : 1;
+  OV.fx.forEach(f => { if (f.k === "scan") drawScan(f, t); });
+  if (!reduced) drawTrail(t);
+  OV.fx.forEach(f => { if (f.k === "ripple" && t >= f.t0) drawRipple(f, t); else if (f.k === "pulse") { const p = (t - f.t0) / f.dur; ring(f.x, f.y, 12 + 22 * eOut(p), rgb(C_INK), Math.max(1, 3.5 * (1 - p)) + 2.5); ring(f.x, f.y, 12 + 22 * eOut(p), rgb(grad([C_BEAM, C_PLASMA], p)), Math.max(1, 3.5 * (1 - p))); } });
+  OV.parts.forEach(p => { const age = t - p.t0; if (age < 0) return; const f = 1 - age / p.life, px = p.x + p.vx * age * (1 - age * .9), py = p.y + p.vy * age * (1 - age * .9), sz = p.s * (.4 + .6 * f);
+    poly([[px, py - sz - .8], [px + sz + .8, py], [px, py + sz + .8], [px - sz - .8, py]], rgb(C_INK)); poly([[px, py - sz], [px + sz, py], [px, py + sz], [px - sz, py]], rgb(mix(p.c, C_ICE, .25 * f))); });
+  if (OV.lock && t >= OV.lock.t0) drawReticle(OV.lock, t);
+  drawCore(x, y, t, s);
+  OV.fx.forEach(f => { if (f.k === "caret") drawCaret(f, t, x, y); });
+  OV.fx.forEach(f => { if (f.k === "keys") drawKeys(f, t, x, y); });
+  if (OV.chip && s > .5) drawChip(x, y, t);
+}
+const centre = el => { const a = el.getBoundingClientRect(), b = sb.getBoundingClientRect(); return [a.left - b.left + a.width / 2, a.top - b.top + a.height / 2]; };
+let queue = [];
+function sched(list) { const t0 = ts(); queue = list.map(o => Object.assign({ at: t0 + o.d }, o)); sbKick(); }
+function sbTick() {
+  const t = ts();
+  while (queue.length && queue[0].at <= t) { const o = queue.shift(); if (o.fn) o.fn(); else { const extra = op(o, t); if (o.then) { queue.unshift(Object.assign({}, o.then, { at: t + extra + (o.then.d || 0) })); } } }
+  pframe(t);
+  const more = queue.length > 0 || busy(t);
+  if (!more) { sbBusy = false; if (!tour) armIdle(); }
+  return more && sbVis;
+}
+function sbKick() { if (!sbBusy) { sbBusy = true; } want(sbTick); }
+function scriptTour() {
+  const dep = centre($('[data-l="Deploy"]', sb)), fld = centre($('[data-l="Release notes"]', sb)), home = [sbW * .14, sbH * .34];
+  return [
+    { d: .1, op: "glide", x: home[0], y: home[1] },
+    { d: .9, op: "aim", x: dep[0], y: dep[1], label: "Deploy", then: { op: "click", x: dep[0], y: dep[1], label: "Deploy", d: .05 } },
+    { d: 2.9, op: "aim", x: fld[0] - sbW * .12, y: fld[1], label: "Release notes", then: { op: "click", x: fld[0] - sbW * .12, y: fld[1], label: "Release notes", d: .05 } },
+    { d: 4.4, op: "type", chars: 24 },
+    { d: 5.9, op: "key", caps: ["ctrl", "s"] },
+    { d: 7.5, op: "scan" },
+    { d: 8.6, op: "glide", x: home[0], y: home[1] },
+    { d: 10.4, fn: () => { if (tour && sbVis) startTour(); } }
+  ];
+}
+function startTour() { if (reduced) return; tour = 1; sched(scriptTour()); }
+function stopTour() { tour = null; queue = []; }
+function armIdle() { clearTimeout(idleSb); if (reduced || !sbVis) return; idleSb = setTimeout(() => { if (sbVis && !queue.length) startTour(); }, 3000); }
+function userAct(x, y, label) {
+  stopTour(); clearTimeout(idleSb);
+  if (reduced) { OV.vis = true; OV.shown = -9; OV.glides = [[x, y, x, y, 0, 0]]; OV.x = x; OV.y = y; OV.lock = { x, y, t0: 0, dur: 0, until: ts() + 1e3 }; chip("click", label, -9, 1e9, C_BEAM); pframe(ts()); return; }
+  sched([{ d: 0, op: "aim", x, y, label, then: { op: "click", x, y, label, d: .05 } }]);
+}
+sb.addEventListener("click", e => {
+  const b = e.target.closest("[data-l]"), lab = b ? b.dataset.l : "";
+  if (e.detail === 0 && b) { const [x, y] = centre(b); userAct(x, y, lab); return; }
+  const r = sb.getBoundingClientRect(); let x = e.clientX - r.left, y = e.clientY - r.top;
+  if (b) [x, y] = centre(b);
+  userAct(x, y, lab);
+});
+sbSize(); addEventListener("resize", () => { sbSize(); pframe(ts()); });
+seen(sb, v => { sbVis = v; if (v) { if (queue.length || busy(ts())) sbKick(); else armIdle(); } else { clearTimeout(idleSb); stopTour(); } }, { threshold: .4 });
+
+
+matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", e => { reduced = e.matches; if (reduced) stopTour(); });
+})();

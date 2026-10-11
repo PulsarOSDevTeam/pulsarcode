@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/PulsarOSDevTeam/pulsarcode/discussions
+    about: Ask how to do something, share a setup, or float an idea in Discussions.
+  - name: Security vulnerability
+    url: https://github.com/PulsarOSDevTeam/pulsarcode/blob/main/SECURITY.md
+    about: Report privately as described in SECURITY.md. Please do not open a public issue.
+  - name: Documentation
+    url: https://github.com/PulsarOSDevTeam/pulsarcode#readme
+    about: Install steps, providers, commands, configuration and the FAQ.

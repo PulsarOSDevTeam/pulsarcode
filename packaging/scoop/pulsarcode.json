@@ -1,0 +1,50 @@
+{
+    "##": [
+        "Scoop manifest for Pulsar Code. Publish it in a bucket, then: scoop install pulsarcode",
+        "version, url, hash and extract_dir are rewritten for every release by tools/release/update_manifests.py."
+    ],
+    "version": "3.0.0",
+    "description": "Run the official Claude Code CLI on any model. One command for NVIDIA NIM, OpenRouter, OpenAI, Gemini, Groq, DeepSeek, Ollama and more.",
+    "homepage": "https://github.com/PulsarOSDevTeam/pulsarcode",
+    "license": "AGPL-3.0-or-later",
+    "depends": "uv",
+    "url": "https://github.com/PulsarOSDevTeam/pulsarcode/releases/download/v3.0.0/pulsarcode-app-3.0.0.zip",
+    "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "extract_dir": "pulsarcode-3.0.0",
+    "installer": {
+        "script": [
+            "$venv = Join-Path $dir 'venv'",
+            "$py = Join-Path $venv 'Scripts\\python.exe'",
+            "$uv = (Get-Command uv -ErrorAction Stop).Source",
+            "& $uv venv --quiet --allow-existing --python '>=3.9' $venv",
+            "if ($LASTEXITCODE -ne 0) { & $uv venv --quiet --allow-existing --python 3.12 --python-preference only-managed $venv }",
+            "if ($LASTEXITCODE -ne 0) { throw 'pulsarcode: could not create the Python runtime' }",
+            "& $uv pip install --quiet --python $py -r (Join-Path $dir 'requirements.txt')",
+            "if ($LASTEXITCODE -ne 0) { throw 'pulsarcode: dependency install failed' }",
+            "# Same bootstrap as pulsar.BOOT: never `python -m pulsar`, which would import from the current folder.",
+            "# -E: a PYTHONPATH naming the current folder cannot run its sitecustomize.py first; -X utf8 replaces PYTHONUTF8, which -E ignores.",
+            "$boot = 'import sys;r=sys.argv.pop(1);m=sys.argv.pop(1);sys.path[:]=[r]+[p for p in sys.path if p not in ('''',''.'',r)];import runpy;sys.argv[0]=m;runpy.run_module(m,run_name=''__main__'',alter_sys=True)'",
+            "$shim = @('@echo off', 'setlocal', 'set \"PULSAR_MANAGED=scoop\"', ('\"%~dp0venv\\Scripts\\python.exe\" -E -X utf8 -B -c \"' + $boot + '\" \"%~dp0.\" pulsar %*'))",
+            "Set-Content -Path (Join-Path $dir 'pulsarcode.cmd') -Value $shim -Encoding ASCII",
+            "& $py -E -X utf8 -B -c $boot $dir pulsar version",
+            "if ($LASTEXITCODE -ne 0) { throw 'pulsarcode: self-test failed' }"
+        ]
+    },
+    "bin": "pulsarcode.cmd",
+    "notes": [
+        "Pulsar Code drives the official Claude Code CLI. If `claude` is missing:",
+        "  irm https://claude.ai/install.ps1 | iex",
+        "Then run `pulsarcode` in any project folder and paste an API key.",
+        "Keys and settings live in ~\\.pulsarcode. Upgrade with `scoop update pulsarcode`."
+    ],
+    "checkver": {
+        "github": "https://github.com/PulsarOSDevTeam/pulsarcode"
+    },
+    "autoupdate": {
+        "url": "https://github.com/PulsarOSDevTeam/pulsarcode/releases/download/v$version/pulsarcode-app-$version.zip",
+        "extract_dir": "pulsarcode-$version",
+        "hash": {
+            "url": "$baseurl/SHA256SUMS"
+        }
+    }
+}
