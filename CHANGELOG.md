@@ -120,6 +120,8 @@ Version 2.0.0 was never released; its changes are part of 3.0.0.
 - **Docs:** `docs/ARCHITECTURE.md`, a rewritten README with recorded demos, and the project site in
   `docs/` (GitHub Pages is opt-in with `tools/github/setup.sh --pages`, which refuses while the
   repository is private).
+  The README's artwork is animated SVG on wide screens and PNG stills on narrow ones: GitHub's phone
+  app left a private repository's SVG files as broken images.
 
 ### Changed
 

@@ -241,17 +241,35 @@ def parse_themed(name: str) -> Optional[Tuple[str, str, bool, str]]:
     return m.group("stem"), m.group("theme"), static, m.group("v")
 
 
-def picture(base: str, alt: str, width: str = "100%", static: bool = True, version: str = "v3") -> str:
-    """The 4-source <picture> (reduced motion and colour scheme) for a README asset.
+# PNG stills of the posters, shown on narrow screens. Seen in October 2026: GitHub's phone app drew the PNG
+# files of a private repository's README and left every SVG file of the repository as a broken image.
+# A still's name has no dot before its extension.
+NARROW = "(max-width: 767px)"
+
+
+def still_name(stem: str, theme: str, version: str = "v3") -> str:
+    """File name of a poster's PNG still: still_name("signal", "dark") -> signal-dark-still-v3.png."""
+    return "%s-%s-still-%s.png" % (stem, theme, version)
+
+
+def picture(base: str, alt: str, width: str = "100%", static: bool = True, version: str = "v3",
+            stills: bool = True) -> str:
+    """The 6-source <picture> for a README asset: PNG stills on narrow screens, then reduced motion
+    and colour scheme.
 
     base: path without the theme suffix, e.g. "assets/readme/signal" -> signal-dark.v3.svg,
-    posters signal-dark-static.v3.svg (names from themed_name()).
+    posters signal-dark-static.v3.svg (names from themed_name()), stills signal-dark-still-v3.png
+    (still_name()). The narrow sources come first, so a narrow screen never selects an SVG.
     """
     head, _, stem = base.rpartition("/")
     pre = head + "/" if head else ""
     d, l_ = pre + themed_name(stem, "dark", False, version), pre + themed_name(stem, "light", False, version)
     sd, sl = pre + themed_name(stem, "dark", True, version), pre + themed_name(stem, "light", True, version)
     lines = ["<picture>"]
+    if stills:
+        lines.append('  <source media="%s and (prefers-color-scheme: dark)" srcset="%s">'
+                     % (NARROW, pre + still_name(stem, "dark", version)))
+        lines.append('  <source media="%s" srcset="%s">' % (NARROW, pre + still_name(stem, "light", version)))
     if static:
         lines.append('  <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="%s">' % sd)
         lines.append('  <source media="(prefers-reduced-motion: reduce)" srcset="%s">' % sl)

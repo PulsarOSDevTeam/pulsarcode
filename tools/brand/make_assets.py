@@ -8,8 +8,8 @@
     python tools/brand/make_assets.py --mp4        # also an MP4 clip into $PULSAR_LAUNCH_DIR (outside the repo)
 
 Steps: tokens.json (motion.py), hero (hero.py), README art (readme_art.py), mark family (mark.py),
-social.png (capture.py), the docs/assets/brand copies and providers.json, removal of the
-pre-v3 hero files, then check.py. See tools/brand/README.md.
+social.png and the PNG stills of the README posters (capture.py), the docs/assets/brand copies and
+providers.json, removal of the pre-v3 hero files, then check.py. See tools/brand/README.md.
 """
 
 from __future__ import annotations
@@ -82,6 +82,7 @@ def raster_assets() -> List[Path]:
     import mark
     out = mark.png_outputs()
     out.append(capture.render_social(BRAND / "social.png"))
+    out += capture.render_stills()
     for name in ("favicon-32.png", "apple-touch-icon.png", "social.png"):
         shutil.copyfile(BRAND / name, SITE / name)
         out.append(SITE / name)

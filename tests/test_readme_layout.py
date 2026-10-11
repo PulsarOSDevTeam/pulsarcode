@@ -69,7 +69,10 @@ def test_every_image_has_alt_text():
             assert len(m.group(1)) >= 12, tag
 
 
-def test_themed_pictures_have_four_sources_in_order():
+NARROW = "(max-width: 767px)"
+
+
+def test_themed_pictures_have_six_sources_in_order():
     themed = [p for p in pictures() if THEMED.search(p)]
     assert len(themed) == 1 + 4 + 4 + 2 + 1  # hero, dividers, cards, signal + constellation, footer
     for p in themed:
@@ -81,10 +84,24 @@ def test_themed_pictures_have_four_sources_in_order():
             sd, sl = base + "-dark-static.v%s.svg" % ver, base + "-light-static.v%s.svg" % ver
         sources = re.findall(r'<source media="([^"]+)" srcset="([^"]+)">', p)
         assert sources == [
+            (NARROW + " and (prefers-color-scheme: dark)", base + "-dark-still-v%s.png" % ver),
+            (NARROW, base + "-light-still-v%s.png" % ver),
             ("(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)", sd),
             ("(prefers-reduced-motion: reduce)", sl),
             ("(prefers-color-scheme: dark)", base + "-dark.v%s.svg" % ver),
         ], p
+
+
+def test_a_narrow_screen_never_selects_an_svg():
+    """GitHub's phone app left a private repository's SVG files as broken images (October 2026): on a
+    narrow screen every picture resolves to a PNG, whatever the colour scheme or the motion setting."""
+    assert len(pictures()) == 13
+    for p in pictures():
+        sources = re.findall(r'<source media="([^"]+)" srcset="([^"]+)">', p)
+        narrow = [(m, s) for m, s in sources if m.startswith(NARROW)]
+        assert narrow and sources[:len(narrow)] == narrow, p     # first, so they win over every other source
+        assert narrow[-1][0] == NARROW, p                        # and the last of them has no other condition
+        assert all(s.endswith(".png") for _, s in narrow), p
 
 
 def test_animated_replays_have_a_reduced_motion_poster():
@@ -94,6 +111,7 @@ def test_animated_replays_have_a_reduced_motion_poster():
         m = re.search(r'<img src="assets/demo/([\w-]+)\.svg"', p)
         if m:
             assert '<source media="(prefers-reduced-motion: reduce)" srcset="assets/demo/posters/%s.png">' % m.group(1) in p
+            assert '<source media="%s" srcset="assets/demo/posters/%s.png">' % (NARROW, m.group(1)) in p
 
 
 def test_only_the_session_replay_animates_outside_details():
@@ -192,6 +210,20 @@ def test_first_view_budget():
             assert f in TEXT, f
 
 
+def test_narrow_first_view_budget():
+    """What a narrow screen loads for one theme: the 12 stills, the session poster and the two side posters <= 1.2 MB."""
+    for theme in ("dark", "light"):
+        files = ["assets/brand/hero-%s-still-v3.png" % theme, "assets/demo/posters/session.png",
+                 "assets/demo/posters/uplink.png", "assets/demo/posters/picker.png"]
+        files += ["assets/readme/%s-%s-still-v3.png" % (s, theme) for s in (
+            "divider-1", "divider-2", "divider-3", "divider-4", "card-stage", "card-council", "card-pilot",
+            "card-observatory", "signal", "constellation", "footer")]
+        total = sum((ROOT / f).stat().st_size for f in files)
+        assert total <= 1.2 * 1024 * 1024, (theme, total)
+        for f in files:
+            assert f in TEXT, f
+
+
 @pytest.mark.parametrize("ref", ["assets/screens/%s.png" % s for s in (
     "boot", "stage-pane", "stage-deck", "stage-diagram", "stage-chart", "stage-web", "observatory", "pilot-cursor")])
 def test_screenshots_kept_with_their_alt_text(ref):
@@ -235,6 +267,6 @@ def test_hero_alt_is_the_brand_alt():
 def test_every_picture_source_exists():
     for body in pictures():
         srcs = re.findall(r'(?:srcset|src)="([^"]+)"', body)
-        assert len(srcs) in (2, 4), body
+        assert len(srcs) in (3, 6), body        # a replay and its two posters; a themed picture
         for s in srcs:
             assert (ROOT / s).is_file(), s

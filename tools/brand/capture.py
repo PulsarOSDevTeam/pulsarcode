@@ -8,6 +8,7 @@ the social PNG and an optional MP4 clip of the social layout.
     python tools/brand/capture.py assets/brand/hero-dark.v3.svg --sheet 12 --out /tmp/h/sheet.png
     python tools/brand/capture.py assets/brand/hero-dark.v3.svg --reduced --out /tmp/h/rm
     python tools/brand/capture.py --social                # assets/brand/social.png (+ docs copy)
+    python tools/brand/capture.py --stills                # the PNG stills of the README posters (narrow screens)
     python tools/brand/capture.py --mp4                   # $PULSAR_LAUNCH_DIR/social.mp4, never in the repo
     python tools/brand/capture.py --accept --out /tmp/h/accept   # the hero's acceptance checks (see accept)
 
@@ -90,6 +91,20 @@ class Shooter:
             paths.append(p)
         page.context.close()
         return paths
+
+    def still(self, svg: str, w: int, h: int, scale: float = 1.0) -> bytes:
+        """`svg` (a static poster) as PNG bytes, transparent where it paints nothing. The document travels
+        in a data: URL: it is the poster with fonts added (with_site_faces), which exists in no file."""
+        import base64
+        page = self.page(w, h, scale, reduced=True)
+        try:
+            page.goto("data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii"))
+            page.evaluate("""() => Promise.all([document.fonts.load("500 14px 'JetBrains Mono'"),
+                             document.fonts.load("500 14px Inter")]).then(() => document.fonts.ready).then(() => 1)""")
+            page.wait_for_timeout(150)
+            return page.screenshot(omit_background=True)
+        finally:
+            page.context.close()
 
     def shake_at(self, url: str, w: int, h: int, t_ms: float) -> Optional[str]:
         page = self.page(w, h)
@@ -212,6 +227,89 @@ def same_picture(a: Path, b: Path, level: int = 4, share: float = .001) -> bool:
         return False
     d = ImageChops.difference(ia, ib).convert("L").tobytes()
     return max(d) <= level and sum(1 for v in d if v) <= share * len(d)
+
+
+STILL_DIRS = (ROOT / "assets" / "brand", ROOT / "assets" / "readme")
+# The site's two faces, put first in the SVG's own stacks for a still (family, file, weights, the stack's first word).
+STILL_FACES = (("JetBrains Mono", "jetbrains-mono-latin.woff2", "100 800", "ui-monospace,"),
+               ("Inter", "inter-latin.woff2", "100 900", "ui-sans-serif,"))
+
+
+def still_sources() -> List[Tuple[Path, Path]]:
+    """(poster SVG, PNG still) for every themed poster under assets/brand and assets/readme."""
+    import svgkit as K
+    out: List[Tuple[Path, Path]] = []
+    for d in STILL_DIRS:
+        for p in sorted(d.glob("*.svg")):
+            got = K.parse_themed(p.name)
+            if got and got[2]:
+                out.append((p, d / K.still_name(got[0], got[1], got[3])))
+    return out
+
+
+def still_scale(w: int) -> float:
+    """Device pixels per SVG unit of a still: the 1280-wide art as it is (a phone shows it about that many
+    pixels wide), the 600-wide cards doubled."""
+    return 1.0 if w >= 1000 else 2.0
+
+
+def with_site_faces(svg: str) -> str:
+    """`svg` with the site's two faces embedded and first in its font stacks, so a still does not depend
+    on the fonts of the machine that renders it (the SVG itself keeps using the viewer's own)."""
+    import base64
+    css = []
+    for fam, f, wt, generic in STILL_FACES:
+        p = FONTS / f
+        if not p.exists():
+            continue
+        css.append("@font-face{font-family:'%s';src:url(data:font/woff2;base64,%s) format('woff2');font-weight:%s}"
+                   % (fam, base64.b64encode(p.read_bytes()).decode("ascii"), wt))
+        svg = svg.replace("font-family:" + generic, "font-family:'%s',%s" % (fam, generic))
+    if not css:
+        return svg
+    i = svg.index(">", svg.index("<svg")) + 1
+    return svg[:i] + "<style>%s</style>" % "".join(css) + svg[i:]
+
+
+def same_still(a: Path, b: Path, level: int = 4, share: float = .001) -> bool:
+    """same_picture() for images with transparency: the alpha channel counts as a fourth channel."""
+    from PIL import Image, ImageChops
+    ia, ib = Image.open(a).convert("RGBA"), Image.open(b).convert("RGBA")
+    if ia.size != ib.size:
+        return False
+    worst = None
+    for band in ImageChops.difference(ia, ib).split():
+        worst = band if worst is None else ImageChops.lighter(worst, band)
+    d = worst.tobytes()
+    return max(d) <= level and sum(1 for v in d if v) <= share * len(d)
+
+
+def render_stills(shooter: Optional[Shooter] = None) -> List[Path]:
+    """The PNG stills the README shows on narrow screens (svgkit.picture): every themed poster as
+    Chromium draws it, lossless, transparent where the poster paints nothing, the site's two faces
+    embedded (with_site_faces). A committed still within raster noise of the new render is kept."""
+    from PIL import Image
+    own = shooter is None
+    sh = shooter or Shooter()
+    out: List[Path] = []
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            fresh = Path(td) / "still.png"
+            for svg, png in still_sources():
+                w, h = svg_size(svg)
+                scale = still_scale(w)
+                fresh.write_bytes(sh.still(with_site_faces(svg.read_text(encoding="utf-8")), w, h, scale))
+                im = Image.open(fresh)
+                im.load()
+                assert im.size == (round(w * scale), round(h * scale)), (svg.name, im.size)
+                im.save(fresh, optimize=True)
+                if not (png.exists() and same_still(png, fresh)):
+                    shutil.copyfile(fresh, png)
+                out.append(png)
+    finally:
+        if own:
+            sh.close()
+    return out
 
 
 BAYER4 = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
@@ -385,6 +483,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         out = Path(opt("--out", str(ROOT / "assets" / "brand" / "social.png")))
         render_social(out)
         print(out, "%.1f KB" % (out.stat().st_size / 1024))
+        return 0
+    if "--stills" in argv:
+        for p in render_stills():
+            print(p.relative_to(ROOT).as_posix(), "%.1f KB" % (p.stat().st_size / 1024))
         return 0
     if "--accept" in argv:
         ok = True

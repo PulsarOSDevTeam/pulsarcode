@@ -14,7 +14,7 @@ differs from len(advertised_providers()), the size budgets in BUDGETS below, ani
 -static file, an animated SVG without its prefers-reduced-motion block (with *{animation:none}
 first), a hero whose .cell rules use animation-fill-mode both/backwards, and (in assets/brand and
 assets/readme) a themed poster not named by svgkit.themed_name() or an animated themed SVG
-without its two posters.
+without its two posters and their two PNG stills (svgkit.still_name()).
 Prints a size table (raw and gzip) for every file it checks. Python 3.9 compatible.
 """
 
@@ -57,6 +57,12 @@ BUDGETS: Tuple[Tuple[str, int, Optional[int]], ...] = (
     ("*brand/avatar-512.png", 40 * KB, None),
     ("*brand/apple-touch-icon.png", 24 * KB, None),
     ("*brand/social.png", 300 * KB, None),
+    ("*brand/hero-*-still-*.png", 400 * KB, None),
+    ("*readme/constellation-*-still-*.png", 400 * KB, None),
+    ("*readme/card-*-still-*.png", 110 * KB, None),
+    ("*readme/signal-*-still-*.png", 70 * KB, None),
+    ("*readme/divider-*-still-*.png", 10 * KB, None),
+    ("*readme/footer-*-still-*.png", 10 * KB, None),
     ("*demo/session.svg", 600 * KB, 120 * KB),
     ("*demo/*.svg", 650 * KB, 120 * KB),
     ("*demo/posters/*.png", 90 * KB, None),
@@ -65,6 +71,9 @@ SET_BUDGETS: Tuple[Tuple[str, int], ...] = (
     ("*readme/card-*-dark.v*.svg", 160 * KB),
     ("*readme/card-*-light.v*.svg", 160 * KB),
     ("assets/demo/*.svg", int(3.6 * 1024 * KB)),
+    # everything a narrow screen loads for one theme: the hero's still and the README's
+    ("assets/*-dark-still-*.png", 1100 * KB),
+    ("assets/*-light-still-*.png", 800 * KB),
 )
 
 
@@ -186,7 +195,8 @@ POSTER_DIRS = ("assets/brand/", "assets/readme/")
 
 
 def poster_names(paths: Iterable[str]) -> List[str]:
-    """Themed posters follow svgkit.themed_name(); every animated themed SVG has both posters."""
+    """Themed posters follow svgkit.themed_name(); every animated themed SVG has both posters and
+    their PNG stills."""
     here = str(Path(__file__).resolve().parent)
     if here not in sys.path:
         sys.path.insert(0, here)
@@ -209,6 +219,9 @@ def poster_names(paths: Iterable[str]) -> List[str]:
                 sib = "%s/%s" % (d, K.themed_name(stem, t, True, v))
                 if sib not in have:
                     errs.append("%s: missing poster %s" % (r, sib))
+                still = "%s/%s" % (d, K.still_name(stem, t, v))
+                if still not in have:
+                    errs.append("%s: missing still %s (tools/brand/capture.py --stills)" % (r, still))
     return errs
 
 

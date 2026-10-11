@@ -23,7 +23,7 @@ Outputs are deterministic: the same code produces byte-identical SVGs (seeded st
 | `hero.py` | `hero-{dark,light}.v3.svg`, `hero-static-{dark,light}.v3.svg`, `docs/assets/brand/hero-inline-dark.svg` |
 | `readme_art.py` | dividers 1-4, Signal Path, four feature cards, provider constellation, footer (each in dark, light and `-static`); `--providers-md` prints the "All providers" table |
 | `mark.py` | `mark.svg`, `favicon.svg`, `favicon-16.png`, `favicon-32.png`, `apple-touch-icon.png`, `avatar-512.png`, `logo.svg`, `logo-light.svg` |
-| `capture.py` | frame-exact captures, contact sheets, `social.png`, the optional MP4, the hero acceptance checks |
+| `capture.py` | frame-exact captures, contact sheets, `social.png`, the PNG stills of the posters (`--stills`), the optional MP4, the hero acceptance checks |
 | `check.py` | the validator (also run by `tools/demo` on `assets/demo/`) |
 | `make_assets.py` | runs all of the above, copies the site files and writes `docs/assets/brand/providers.json` |
 
@@ -41,17 +41,19 @@ python tools/brand/capture.py --accept --out /tmp/h/accept    # hero checks A1, 
 
 ## Embedding
 
-Every animated README image ships a static poster and is embedded with the 4-source `<picture>`
-(reduced motion first, then colour scheme), because an SVG inside `<img>` does not see the page's
-reduced-motion emulation. Each SVG also carries its own `prefers-reduced-motion` block as the last
-rule. Names come from one rule, `svgkit.themed_name()`: animated `<stem>-<theme>.v3.svg`, poster
-`<stem>-<theme>-static.v3.svg`, with the hero as the single exception (`hero-static-<theme>.v3.svg`,
-its original name, which the Pages build relies on). The generators, `check.py` (which also fails on an
-animated themed SVG missing a poster) and `svgkit.picture()` all use it. `picture()` emits the markup,
-for example:
+Every animated README image ships a static poster and is embedded with the 6-source `<picture>`
+(narrow screens first, then reduced motion, then colour scheme). The poster is there because an SVG
+inside `<img>` does not see the page's reduced-motion emulation. Each SVG also carries its own
+`prefers-reduced-motion` block as the last rule. Names come from one rule, `svgkit.themed_name()`:
+animated `<stem>-<theme>.v3.svg`, poster `<stem>-<theme>-static.v3.svg`, with the hero as the single
+exception (`hero-static-<theme>.v3.svg`, its original name, which the Pages build relies on). The
+generators, `check.py` (which also fails on an animated themed SVG missing a poster or a still) and
+`svgkit.picture()` all use it. `picture()` emits the markup, for example:
 
 ```html
 <picture>
+  <source media="(max-width: 767px) and (prefers-color-scheme: dark)" srcset="assets/brand/hero-dark-still-v3.png">
+  <source media="(max-width: 767px)" srcset="assets/brand/hero-light-still-v3.png">
   <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="assets/brand/hero-static-dark.v3.svg">
   <source media="(prefers-reduced-motion: reduce)" srcset="assets/brand/hero-static-light.v3.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/brand/hero-dark.v3.svg">
@@ -59,8 +61,18 @@ for example:
 </picture>
 ```
 
-To verify on GitHub, push a test branch and open its README: the combined-media `<source>` must
-survive the sanitizer, the animations must play, and the light theme must show the chart-recorder
+**PNG stills for narrow screens.** In October 2026 GitHub's phone app drew the PNG files of a private
+repository's README and left every SVG file of the repository as a broken image. So each poster also
+ships as a PNG still, `<stem>-<theme>-still-v3.png` (`svgkit.still_name()`, no dot before the extension),
+and the two narrow sources come first: a screen under 768 px never selects an SVG, and shows the
+artwork without motion. `capture.py --stills` renders them from the posters (Chromium, transparent
+background, 1280 px across, the 600-wide cards doubled) with the site's two faces embedded, so a still
+does not depend on the fonts of the machine that renders it. The terminal replay does the same with
+its poster from `tools/demo/posters.py`.
+
+To verify on GitHub, push a test branch and open its README, on a wide screen and in the phone app:
+the combined-media `<source>` must survive the sanitizer, the animations must play on the wide
+screen, every image must show on the phone, and the light theme must show the chart-recorder
 plate. If the combined media query is stripped, fall back to the
 two-source `<picture>` (colour scheme only) and rely on the in-SVG reduced-motion block.
 

@@ -1,6 +1,8 @@
 <div align="center">
 
 <picture>
+  <source media="(max-width: 767px) and (prefers-color-scheme: dark)" srcset="assets/brand/hero-dark-still-v3.png">
+  <source media="(max-width: 767px)" srcset="assets/brand/hero-light-still-v3.png">
   <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="assets/brand/hero-static-dark.v3.svg">
   <source media="(prefers-reduced-motion: reduce)" srcset="assets/brand/hero-static-light.v3.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/brand/hero-dark.v3.svg">
@@ -132,6 +134,8 @@ No key yet? Type `ollama` (or `lmstudio`) at the key prompt to use local models,
 `Ctrl+O` to open NVIDIA's key page.
 
 <picture>
+  <source media="(max-width: 767px) and (prefers-color-scheme: dark)" srcset="assets/readme/divider-1-dark-still-v3.png">
+  <source media="(max-width: 767px)" srcset="assets/readme/divider-1-light-still-v3.png">
   <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="assets/readme/divider-1-dark-static.v3.svg">
   <source media="(prefers-reduced-motion: reduce)" srcset="assets/readme/divider-1-light-static.v3.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/divider-1-dark.v3.svg">
@@ -142,6 +146,7 @@ No key yet? Type `ollama` (or `lmstudio`) at the key prompt to use local models,
 
 <p align="center">
 <picture>
+  <source media="(max-width: 767px)" srcset="assets/demo/posters/session.png">
   <source media="(prefers-reduced-motion: reduce)" srcset="assets/demo/posters/session.png">
   <img src="assets/demo/session.svg" width="860" alt="The official Claude Code CLI launched through Pulsar Code on a non-Claude model: a question about a small project, a Read tool call, a streamed answer and the Pulsar status line">
 </picture>
@@ -211,6 +216,8 @@ boot panel's values (shown in demo mode) come from that demo stub and synthetic 
 are illustrative, not measurements. The session recording shows Claude Code's own interface.</sub>
 
 <picture>
+  <source media="(max-width: 767px) and (prefers-color-scheme: dark)" srcset="assets/readme/divider-2-dark-still-v3.png">
+  <source media="(max-width: 767px)" srcset="assets/readme/divider-2-light-still-v3.png">
   <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="assets/readme/divider-2-dark-static.v3.svg">
   <source media="(prefers-reduced-motion: reduce)" srcset="assets/readme/divider-2-light-static.v3.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/divider-2-dark.v3.svg">
@@ -224,6 +231,8 @@ are illustrative, not measurements. The session recording shows Claude Code's ow
 <td width="50%" valign="top">
 
 <picture>
+  <source media="(max-width: 767px) and (prefers-color-scheme: dark)" srcset="assets/readme/card-stage-dark-still-v3.png">
+  <source media="(max-width: 767px)" srcset="assets/readme/card-stage-light-still-v3.png">
   <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="assets/readme/card-stage-dark-static.v3.svg">
   <source media="(prefers-reduced-motion: reduce)" srcset="assets/readme/card-stage-light-static.v3.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/card-stage-dark.v3.svg">
@@ -236,6 +245,8 @@ are illustrative, not measurements. The session recording shows Claude Code's ow
 <td width="50%" valign="top">
 
 <picture>
+  <source media="(max-width: 767px) and (prefers-color-scheme: dark)" srcset="assets/readme/card-council-dark-still-v3.png">
+  <source media="(max-width: 767px)" srcset="assets/readme/card-council-light-still-v3.png">
   <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="assets/readme/card-council-dark-static.v3.svg">
   <source media="(prefers-reduced-motion: reduce)" srcset="assets/readme/card-council-light-static.v3.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/card-council-dark.v3.svg">
@@ -250,6 +261,8 @@ are illustrative, not measurements. The session recording shows Claude Code's ow
 <td width="50%" valign="top">
 
 <picture>
+  <source media="(max-width: 767px) and (prefers-color-scheme: dark)" srcset="assets/readme/card-pilot-dark-still-v3.png">
+  <source media="(max-width: 767px)" srcset="assets/readme/card-pilot-light-still-v3.png">
   <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="assets/readme/card-pilot-dark-static.v3.svg">
   <source media="(prefers-reduced-motion: reduce)" srcset="assets/readme/card-pilot-light-static.v3.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/card-pilot-dark.v3.svg">
@@ -262,6 +275,8 @@ are illustrative, not measurements. The session recording shows Claude Code's ow
 <td width="50%" valign="top">
 
 <picture>
+  <source media="(max-width: 767px) and (prefers-color-scheme: dark)" srcset="assets/readme/card-observatory-dark-still-v3.png">
+  <source media="(max-width: 767px)" srcset="assets/readme/card-observatory-light-still-v3.png">
   <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="assets/readme/card-observatory-dark-static.v3.svg">
   <source media="(prefers-reduced-motion: reduce)" srcset="assets/readme/card-observatory-light-static.v3.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/card-observatory-dark.v3.svg">
@@ -345,6 +360,8 @@ Connect as many as you like. They all appear in one picker, and `pulsarcode use 
 switches the active one.
 
 <picture>
+  <source media="(max-width: 767px) and (prefers-color-scheme: dark)" srcset="assets/readme/divider-3-dark-still-v3.png">
+  <source media="(max-width: 767px)" srcset="assets/readme/divider-3-light-still-v3.png">
   <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="assets/readme/divider-3-dark-static.v3.svg">
   <source media="(prefers-reduced-motion: reduce)" srcset="assets/readme/divider-3-light-static.v3.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/divider-3-dark.v3.svg">
@@ -354,6 +371,8 @@ switches the active one.
 ## How it works
 
 <picture>
+  <source media="(max-width: 767px) and (prefers-color-scheme: dark)" srcset="assets/readme/signal-dark-still-v3.png">
+  <source media="(max-width: 767px)" srcset="assets/readme/signal-light-still-v3.png">
   <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="assets/readme/signal-dark-static.v3.svg">
   <source media="(prefers-reduced-motion: reduce)" srcset="assets/readme/signal-light-static.v3.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/signal-dark.v3.svg">
@@ -363,6 +382,8 @@ switches the active one.
 <sub>Before the first 200, any target may fail and the next in the session plan takes over. After it, Pulsar Core streams only from that target.</sub>
 
 <picture>
+  <source media="(max-width: 767px) and (prefers-color-scheme: dark)" srcset="assets/readme/constellation-dark-still-v3.png">
+  <source media="(max-width: 767px)" srcset="assets/readme/constellation-light-still-v3.png">
   <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="assets/readme/constellation-dark-static.v3.svg">
   <source media="(prefers-reduced-motion: reduce)" srcset="assets/readme/constellation-light-static.v3.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/constellation-dark.v3.svg">
@@ -400,6 +421,8 @@ Core stops by itself shortly after your last session ends. The full design is in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 <picture>
+  <source media="(max-width: 767px) and (prefers-color-scheme: dark)" srcset="assets/readme/divider-4-dark-still-v3.png">
+  <source media="(max-width: 767px)" srcset="assets/readme/divider-4-light-still-v3.png">
   <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="assets/readme/divider-4-dark-static.v3.svg">
   <source media="(prefers-reduced-motion: reduce)" srcset="assets/readme/divider-4-light-static.v3.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/divider-4-dark.v3.svg">
@@ -697,6 +720,8 @@ Open source under AGPL-3.0-or-later and maintained by
 report a vulnerability, and [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 <picture>
+  <source media="(max-width: 767px) and (prefers-color-scheme: dark)" srcset="assets/readme/footer-dark-still-v3.png">
+  <source media="(max-width: 767px)" srcset="assets/readme/footer-light-still-v3.png">
   <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="assets/readme/footer-dark-static.v3.svg">
   <source media="(prefers-reduced-motion: reduce)" srcset="assets/readme/footer-light-static.v3.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/footer-dark.v3.svg">

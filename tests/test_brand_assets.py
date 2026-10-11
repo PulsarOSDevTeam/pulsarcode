@@ -6,6 +6,7 @@ import json
 import math
 import random
 import re
+import struct
 import sys
 from pathlib import Path
 
@@ -140,15 +141,63 @@ def test_poster_names_follow_one_rule():
     pic = K.picture("assets/readme/card-stage", "x")
     assert 'srcset="assets/readme/card-stage-dark-static.v3.svg"' in pic
     assert 'srcset="assets/brand/hero-static-dark.v3.svg"' in K.picture("assets/brand/hero", "x")
+    # PNG stills for narrow screens: one name rule, no exception for the hero, first in the picture
+    assert K.still_name("signal", "dark") == "signal-dark-still-v3.png"
+    assert K.still_name("hero", "light") == "hero-light-still-v3.png" and K.parse_themed("hero-light-still-v3.png") is None
+    assert 'srcset="assets/readme/card-stage-dark-still-v3.png"' in pic and pic.index("-still-") < pic.index("-static.")
+    assert "-still-" not in K.picture("assets/readme/card-stage", "x", stills=False)
     for p in list(RA.outputs()) + list(hero.outputs()):
         stem, theme, static, v = K.parse_themed(p.name)
         assert p.name == K.themed_name(stem, theme, static, v)
     errs = check.poster_names(["assets/readme/signal-dark.v3.svg", "assets/readme/signal-static-dark.v3.svg"])
     assert any("should be signal-dark-static.v3.svg" in e for e in errs)
     assert any("missing poster assets/readme/signal-light-static.v3.svg" in e for e in errs)
+    assert any("missing still assets/readme/signal-light-still-v3.png" in e for e in errs)
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     for src in re.findall(r'srcset="(assets/(?:brand|readme)/[^"]+-static[^"]*)"', readme):
         assert (ROOT / src).is_file(), src
+
+
+def test_every_poster_has_a_committed_png_still():
+    import capture
+    pairs = capture.still_sources()
+    assert len(pairs) == 2 * (1 + 4 + 4 + 2 + 1)        # hero, dividers, cards, signal + constellation, footer
+    assert capture.still_scale(1280) == 1 and capture.still_scale(600) == 2
+    for svg, png in pairs:
+        assert png.is_file(), "%s is missing: run tools/brand/capture.py --stills" % png.name
+        head = png.read_bytes()[:26]
+        assert head[1:4] == b"PNG", png.name
+        w, h, depth, colour = struct.unpack(">IIBB", head[16:26])
+        sw, sh = capture.svg_size(svg)
+        k = capture.still_scale(sw)
+        assert (w, h) == (round(sw * k), round(sh * k)), png.name
+        assert depth == 8 and colour in (2, 6), png.name     # 8-bit RGB, or RGBA where the poster is not a full plate
+        if svg.name.startswith("card-"):
+            assert colour == 6, png.name                     # a card keeps its transparent corners
+        assert "." not in png.stem, png.name                 # no dot before the extension
+
+
+def test_stills_embed_the_site_faces_ahead_of_the_svg_stacks():
+    import capture
+    svg = (ROOT / "assets" / "readme" / "card-stage-dark-static.v3.svg").read_text(encoding="utf-8")
+    out = capture.with_site_faces(svg)
+    assert out.count("@font-face{font-family:'JetBrains Mono'") == 1 and out.count("@font-face{font-family:'Inter'") == 1
+    assert "font-family:'JetBrains Mono',ui-monospace," in out and "font-family:'Inter',ui-sans-serif," in out
+    # nothing else changes: without the added style block and the two prefixes it is the poster again
+    back = re.sub(r"<style>@font-face.*?</style>", "", out, count=1, flags=re.S)
+    assert back.replace("'JetBrains Mono',", "").replace("'Inter',", "") == svg
+
+
+def test_same_still_counts_the_alpha_channel():
+    Image = pytest.importorskip("PIL.Image")   # dev-only: stills are built with Pillow
+    import capture
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        a, b, c = (Path(td) / n_ for n_ in ("a.png", "b.png", "c.png"))
+        Image.new("RGBA", (40, 20), (10, 20, 30, 255)).save(a)
+        Image.new("RGBA", (40, 20), (10, 20, 30, 255)).save(b)
+        Image.new("RGBA", (40, 20), (10, 20, 30, 0)).save(c)      # the same colour, fully transparent
+        assert capture.same_still(a, b) and not capture.same_still(a, c)
 
 
 def test_static_hero_has_no_animation_and_fits():
